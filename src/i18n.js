@@ -47,6 +47,7 @@ const resources = {
         deleteStep2Title: 'Confirmar eliminación',
         deleteStep2Body: 'Esta acción no se puede deshacer.',
         timeLabel: 'Hora',
+        edit: 'Editar',
       },
       profile: {
         title: 'Perfil',
@@ -110,6 +111,7 @@ const resources = {
         deleteStep2Title: 'Confirm delete',
         deleteStep2Body: 'This action cannot be undone.',
         timeLabel: 'Time',
+        edit: 'Edit',
       },
       profile: {
         title: 'Profile',

@@ -18,6 +18,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
+import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
@@ -29,6 +30,7 @@ import 'dayjs/locale/en';
 import { useTranslation } from 'react-i18next';
 import TwoStepConfirmDialog from '../components/TwoStepConfirmDialog.jsx';
 import TopNavBar from '../components/TopNavBar.jsx';
+import RichTextEditor from '../components/RichTextEditor.jsx';
 import {
   createEntry,
   deleteEntry,
@@ -71,6 +73,17 @@ function formatTime(ts, lang) {
   }
 }
 
+function stripHtmlToText(input) {
+  if (!input) return '';
+  try {
+    if (typeof window === 'undefined' || !window.DOMParser) return String(input);
+    const doc = new window.DOMParser().parseFromString(String(input), 'text/html');
+    return (doc.body?.textContent || '').replace(/\s+$/u, '');
+  } catch {
+    return String(input);
+  }
+}
+
 export default function JournalPage({
   user,
   profile,
@@ -98,6 +111,8 @@ export default function JournalPage({
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
+
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     try {
@@ -151,6 +166,7 @@ export default function JournalPage({
     if (!user?.uid) return;
     const created = await createEntry(user.uid, dateKey);
     setSelectedEntryId(created.id);
+    setIsEditing(true);
     if (!isDesktop) {
       setMobileOpen(false);
     }
@@ -174,6 +190,7 @@ export default function JournalPage({
       });
       // Return to "home" (entries list) after finishing
       setSelectedEntryId(null);
+      setIsEditing(false);
     } finally {
       setSaving(false);
     }
@@ -188,15 +205,17 @@ export default function JournalPage({
   const handleBack = async () => {
     if (!selectedEntry) {
       setSelectedEntryId(null);
+      setIsEditing(false);
       return;
     }
 
-    const isEmptyDraft = !draftTitle.trim() && !draftBody.trim();
+    const isEmptyDraft = !draftTitle.trim() && !stripHtmlToText(draftBody).trim();
     if (isEmptyDraft && user?.uid && selectedEntryId) {
       try {
         await deleteEntry(user.uid, dateKey, selectedEntryId);
       } finally {
         setSelectedEntryId(null);
+        setIsEditing(false);
       }
       return;
     }
@@ -217,7 +236,7 @@ export default function JournalPage({
   const isUnsavedNewEntry = Boolean(
     selectedEntry &&
       (selectedEntry.title || '') === '' &&
-      (selectedEntry.body || '') === '' &&
+      !stripHtmlToText(selectedEntry.body || '').trim() &&
       selectedEntry.createdAt &&
       selectedEntry.updatedAt &&
       selectedEntry.createdAt === selectedEntry.updatedAt,
@@ -230,10 +249,12 @@ export default function JournalPage({
       if (isUnsavedNewEntry) {
         await deleteEntry(user.uid, dateKey, selectedEntryId);
         setSelectedEntryId(null);
+        setIsEditing(false);
       } else {
         setDraftTitle(selectedEntry?.title || '');
         setDraftBody(selectedEntry?.body || '');
         setEntryTime(dayjs(selectedEntry?.createdAt || Date.now()));
+        setIsEditing(false);
       }
     } finally {
       handleCloseDiscard();
@@ -256,10 +277,18 @@ export default function JournalPage({
     try {
       await deleteEntry(user.uid, dateKey, selectedEntryId);
       setSelectedEntryId(null);
+      setIsEditing(false);
     } finally {
       handleCloseDelete();
     }
   };
+
+  useEffect(() => {
+    if (selectedEntry && !isUnsavedNewEntry) {
+      setIsEditing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEntryId]);
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -399,7 +428,7 @@ export default function JournalPage({
                 <Box>
                   {entries.map((entry, idx) => {
                     const title = entry.title?.trim() ? entry.title : t('journal.untitled');
-                    const bodyPreview = entry.body?.trim() ? entry.body : '';
+                    const bodyPreview = entry.body ? stripHtmlToText(entry.body).trim() : '';
                     const timeLabel = formatTime(entry.createdAt, i18n.language);
 
                     return (
@@ -461,6 +490,7 @@ export default function JournalPage({
                       label={t('journal.timeLabel')}
                       value={entryTime}
                       onChange={(v) => v && setEntryTime(v)}
+                      disabled={!isEditing}
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </LocalizationProvider>
@@ -472,6 +502,7 @@ export default function JournalPage({
                 value={draftTitle}
                 onChange={(e) => setDraftTitle(e.target.value)}
                 placeholder={t('journal.titleLabel')}
+                readOnly={!isEditing}
                 style={{
                   width: '100%',
                   fontSize: '1.6rem',
@@ -483,38 +514,60 @@ export default function JournalPage({
               />
 
               <Box
-                component="textarea"
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                placeholder={t('journal.bodyLabel')}
                 sx={{
                   width: '100%',
                   flex: 1,
                   minHeight: 0,
-                  resize: 'none',
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
                   fontSize: '1rem',
                   lineHeight: 1.6,
                   overflowY: 'auto',
                 }}
-              />
+              >
+                {isEditing ? (
+                  <RichTextEditor
+                    value={draftBody}
+                    onChange={(html) => setDraftBody(html)}
+                    placeholder={t('journal.bodyLabel')}
+                    ariaLabel={t('journal.bodyLabel')}
+                    readOnly={false}
+                    showToolbar
+                  />
+                ) : (
+                  <RichTextEditor
+                    value={draftBody}
+                    placeholder={t('journal.bodyLabel')}
+                    ariaLabel={t('journal.bodyLabel')}
+                    readOnly
+                    showToolbar={false}
+                  />
+                )}
+              </Box>
 
               <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
                 <Button color="error" startIcon={<DeleteIcon />} onClick={handleOpenDelete} disabled={saving}>
                   {t('journal.delete')}
                 </Button>
-                <Stack direction="row" spacing={1}>
-                  {isDirty || isUnsavedNewEntry ? (
-                    <Button onClick={handleOpenDiscard} color="inherit">
-                      {t('journal.discard')}
+                {isEditing ? (
+                  <Stack direction="row" spacing={1}>
+                    {isDirty || isUnsavedNewEntry ? (
+                      <Button onClick={handleOpenDiscard} color="inherit">
+                        {t('journal.discard')}
+                      </Button>
+                    ) : null}
+                    <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
+                      {t('journal.save')}
                     </Button>
-                  ) : null}
-                  <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
-                    {t('journal.save')}
+                  </Stack>
+                ) : (
+                  <Button
+                    variant="contained"
+                    startIcon={<EditIcon />}
+                    onClick={() => setIsEditing(true)}
+                    color="primary"
+                  >
+                    {t('journal.edit') || 'Editar'}
                   </Button>
-                </Stack>
+                )}
               </Stack>
             </Stack>
           </Box>
