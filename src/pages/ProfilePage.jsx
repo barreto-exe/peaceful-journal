@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendEmailVerification,
   updateEmail,
   updatePassword,
 } from 'firebase/auth';
@@ -28,6 +29,8 @@ import { getUserInitials } from '../utils/user.js';
 
 export default function ProfilePage({ user, profile, onBack }) {
   const { t, i18n } = useTranslation();
+
+  const [isEmailVerified, setIsEmailVerified] = useState(Boolean(user?.emailVerified));
 
   const [displayName, setDisplayName] = useState('');
   const [locale, setLocale] = useState(i18n.language || 'es');
@@ -47,6 +50,14 @@ export default function ProfilePage({ user, profile, onBack }) {
   const [pwdError, setPwdError] = useState('');
   const [pwdSaved, setPwdSaved] = useState(false);
 
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [verifySent, setVerifySent] = useState(false);
+
+  useEffect(() => {
+    setIsEmailVerified(Boolean(user?.emailVerified));
+  }, [user?.emailVerified]);
+
   useEffect(() => {
     setDisplayName(profile?.displayName || '');
     setLocale(profile?.locale || i18n.language || 'es');
@@ -56,6 +67,38 @@ export default function ProfilePage({ user, profile, onBack }) {
     () => getUserInitials(user, profile?.displayName || displayName),
     [user, profile?.displayName, displayName],
   );
+
+  const refreshVerificationStatus = useCallback(async () => {
+    if (!user) return;
+    try {
+      await user.reload();
+      setIsEmailVerified(Boolean(user.emailVerified));
+    } catch (e) {
+      setVerifyError(e?.message || String(e));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshVerificationStatus();
+  }, [refreshVerificationStatus]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      refreshVerificationStatus();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshVerificationStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshVerificationStatus]);
 
   const handleSaveProfile = async () => {
     if (!user?.uid) return;
@@ -93,6 +136,9 @@ export default function ProfilePage({ user, profile, onBack }) {
     setEmailSaved(false);
     setEmailLoading(true);
     try {
+      if (!isEmailVerified) {
+        throw new Error(t('profile.verifyRequiredToManageAccount'));
+      }
       await requireReauth(currentPasswordForEmail);
       await updateEmail(user, newEmail.trim());
       setEmailSaved(true);
@@ -110,6 +156,9 @@ export default function ProfilePage({ user, profile, onBack }) {
     setPwdSaved(false);
     setPwdLoading(true);
     try {
+      if (!isEmailVerified) {
+        throw new Error(t('profile.verifyRequiredToManageAccount'));
+      }
       await requireReauth(currentPasswordForPassword);
       await updatePassword(user, newPassword);
       setPwdSaved(true);
@@ -119,6 +168,21 @@ export default function ProfilePage({ user, profile, onBack }) {
       setPwdError(e?.message || String(e));
     } finally {
       setPwdLoading(false);
+    }
+  };
+
+  const handleSendVerificationEmail = async () => {
+    if (!user) return;
+    setVerifyError('');
+    setVerifySent(false);
+    setVerifyLoading(true);
+    try {
+      await sendEmailVerification(user);
+      setVerifySent(true);
+    } catch (e) {
+      setVerifyError(e?.message || String(e));
+    } finally {
+      setVerifyLoading(false);
     }
   };
 
@@ -181,11 +245,34 @@ export default function ProfilePage({ user, profile, onBack }) {
                   {user?.email}
                 </Typography>
 
+                {!isEmailVerified && (
+                  <>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('profile.emailNotVerified')}
+                    </Typography>
+                    {verifyError && <Alert severity="error">{verifyError}</Alert>}
+                    {verifySent && <Alert severity="success">{t('profile.verifyEmailSent')}</Alert>}
+                    <Button
+                      variant="outlined"
+                      onClick={handleSendVerificationEmail}
+                      disabled={verifyLoading || !user?.email}
+                    >
+                      {t('profile.verifyEmail')}
+                    </Button>
+                    <Divider />
+                  </>
+                )}
+
+                {!isEmailVerified && (
+                  <Alert severity="warning">{t('profile.verifyRequiredToManageAccount')}</Alert>
+                )}
+
                 <TextField
                   label={t('profile.newEmail')}
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
+                  disabled={!isEmailVerified}
                   fullWidth
                 />
                 <TextField
@@ -193,6 +280,7 @@ export default function ProfilePage({ user, profile, onBack }) {
                   type="password"
                   value={currentPasswordForEmail}
                   onChange={(e) => setCurrentPasswordForEmail(e.target.value)}
+                  disabled={!isEmailVerified}
                   fullWidth
                 />
                 {emailError && <Alert severity="error">{emailError}</Alert>}
@@ -200,7 +288,12 @@ export default function ProfilePage({ user, profile, onBack }) {
                 <Button
                   variant="contained"
                   onClick={handleUpdateEmail}
-                  disabled={emailLoading || !newEmail.trim() || !currentPasswordForEmail}
+                  disabled={
+                    !isEmailVerified
+                    || emailLoading
+                    || !newEmail.trim()
+                    || !currentPasswordForEmail
+                  }
                 >
                   {t('profile.updateEmail')}
                 </Button>
@@ -212,6 +305,7 @@ export default function ProfilePage({ user, profile, onBack }) {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={!isEmailVerified}
                   fullWidth
                 />
                 <TextField
@@ -219,6 +313,7 @@ export default function ProfilePage({ user, profile, onBack }) {
                   type="password"
                   value={currentPasswordForPassword}
                   onChange={(e) => setCurrentPasswordForPassword(e.target.value)}
+                  disabled={!isEmailVerified}
                   fullWidth
                 />
                 {pwdError && <Alert severity="error">{pwdError}</Alert>}
@@ -226,7 +321,12 @@ export default function ProfilePage({ user, profile, onBack }) {
                 <Button
                   variant="contained"
                   onClick={handleUpdatePassword}
-                  disabled={pwdLoading || !newPassword || !currentPasswordForPassword}
+                  disabled={
+                    !isEmailVerified
+                    || pwdLoading
+                    || !newPassword
+                    || !currentPasswordForPassword
+                  }
                 >
                   {t('profile.updatePassword')}
                 </Button>
