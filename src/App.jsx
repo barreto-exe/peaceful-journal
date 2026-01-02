@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { AppBar, Box, Button, Container, Toolbar, Typography } from '@mui/material';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import LoginPage from './pages/LoginPage.jsx';
 import { auth } from './firebase.js';
 
 export default function App() {

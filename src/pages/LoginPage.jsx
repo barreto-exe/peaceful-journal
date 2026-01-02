@@ -1,4 +1,20 @@
 import { useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  IconButton,
+  InputAdornment,
+  Link,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase.js';
 
