@@ -130,3 +130,43 @@ export async function deleteEntry(uid, dateKey, entryId) {
   const entryRef = ref(db, `entries/${uid}/${dateKey}/${entryId}`);
   await remove(entryRef);
 }
+
+/**
+ * Import many entries at once.
+ *
+ * Notes:
+ * - Entries are grouped by day using the same dateKey strategy as the app.
+ * - This uses a single multi-location update for efficiency.
+ *
+ * @param {string} uid
+ * @param {Array<Required<Pick<Entry,'title'|'body'|'createdAt'>> & Partial<Pick<Entry,'updatedAt'>>>} entries
+ * @returns {Promise<{imported: number}>}
+ */
+export async function importEntries(uid, entries) {
+  if (!uid) throw new Error('Missing uid.');
+  if (!Array.isArray(entries) || entries.length === 0) return { imported: 0 };
+
+  /** @type {Record<string, any>} */
+  const updates = {};
+
+  for (const entry of entries) {
+    const createdAt = Number(entry.createdAt);
+    if (!Number.isFinite(createdAt)) continue;
+
+    const dateKey = formatDateKey(new Date(createdAt));
+    const dateRef = ref(db, `entries/${uid}/${dateKey}`);
+    const newRef = push(dateRef);
+    if (!newRef.key) continue;
+
+    updates[`entries/${uid}/${dateKey}/${newRef.key}`] = {
+      title: String(entry.title || ''),
+      body: String(entry.body || ''),
+      createdAt,
+      updatedAt: Number.isFinite(Number(entry.updatedAt)) ? Number(entry.updatedAt) : createdAt,
+    };
+  }
+
+  const rootRef = ref(db);
+  await update(rootRef, updates);
+  return { imported: Object.keys(updates).length };
+}

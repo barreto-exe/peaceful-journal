@@ -20,12 +20,76 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   sendEmailVerification,
-  updateEmail,
   updatePassword,
 } from 'firebase/auth';
-import { upsertProfile } from '../data/journalDb.js';
+import Papa from 'papaparse';
+import { importEntries, upsertProfile } from '../data/journalDb.js';
 import TopNavBar from '../components/TopNavBar.jsx';
 import { getUserInitials } from '../utils/user.js';
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function plainTextToHtml(text) {
+  const normalized = String(text || '').replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+
+  // Keep empty lines as paragraph breaks
+  const paragraphs = [];
+  let buffer = [];
+  const flush = () => {
+    if (buffer.length === 0) {
+      paragraphs.push('<p></p>');
+      return;
+    }
+    const content = buffer.join('\n');
+    paragraphs.push(`<p>${escapeHtml(content)}</p>`);
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    if (line.trim() === '') {
+      flush();
+    } else {
+      buffer.push(line);
+    }
+  }
+  if (buffer.length) flush();
+
+  return paragraphs.join('');
+}
+
+function parseImportedDate(value) {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const ms = Date.parse(raw);
+  if (Number.isFinite(ms)) return ms;
+  const asDate = new Date(raw);
+  const asMs = asDate.getTime();
+  return Number.isFinite(asMs) ? asMs : null;
+}
+
+async function parseCsvFile(file) {
+  const csv = await file.text();
+  const parsed = Papa.parse(csv, {
+    header: true,
+    skipEmptyLines: true,
+  });
+
+  if (parsed.errors?.length) {
+    const first = parsed.errors[0];
+    throw new Error(first?.message || 'CSV parse error');
+  }
+
+  const rows = Array.isArray(parsed.data) ? parsed.data : [];
+  return rows;
+}
 
 export default function ProfilePage({ user, profile, onBack }) {
   const { t, i18n } = useTranslation();
@@ -38,12 +102,6 @@ export default function ProfilePage({ user, profile, onBack }) {
   const [profileError, setProfileError] = useState('');
   const [profileSaved, setProfileSaved] = useState(false);
 
-  const [newEmail, setNewEmail] = useState('');
-  const [currentPasswordForEmail, setCurrentPasswordForEmail] = useState('');
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailError, setEmailError] = useState('');
-  const [emailSaved, setEmailSaved] = useState(false);
-
   const [newPassword, setNewPassword] = useState('');
   const [currentPasswordForPassword, setCurrentPasswordForPassword] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -53,6 +111,11 @@ export default function ProfilePage({ user, profile, onBack }) {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState('');
   const [verifySent, setVerifySent] = useState(false);
+
+  const [importFile, setImportFile] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importResult, setImportResult] = useState(null);
 
   useEffect(() => {
     setIsEmailVerified(Boolean(user?.emailVerified));
@@ -131,26 +194,6 @@ export default function ProfilePage({ user, profile, onBack }) {
     await reauthenticateWithCredential(user, credential);
   }
 
-  const handleUpdateEmail = async () => {
-    setEmailError('');
-    setEmailSaved(false);
-    setEmailLoading(true);
-    try {
-      if (!isEmailVerified) {
-        throw new Error(t('profile.verifyRequiredToManageAccount'));
-      }
-      await requireReauth(currentPasswordForEmail);
-      await updateEmail(user, newEmail.trim());
-      setEmailSaved(true);
-      setNewEmail('');
-      setCurrentPasswordForEmail('');
-    } catch (e) {
-      setEmailError(e?.message || String(e));
-    } finally {
-      setEmailLoading(false);
-    }
-  };
-
   const handleUpdatePassword = async () => {
     setPwdError('');
     setPwdSaved(false);
@@ -183,6 +226,66 @@ export default function ProfilePage({ user, profile, onBack }) {
       setVerifyError(e?.message || String(e));
     } finally {
       setVerifyLoading(false);
+    }
+  };
+
+  const handlePickImportFile = (e) => {
+    const file = e.target.files?.[0] || null;
+    setImportError('');
+    setImportResult(null);
+    setImportFile(file);
+  };
+
+  const handleImport = async () => {
+    if (!user?.uid) return;
+    if (!importFile) return;
+    setImportError('');
+    setImportResult(null);
+    setImportLoading(true);
+    try {
+      const rows = await parseCsvFile(importFile);
+
+      const imported = [];
+      const skipped = [];
+
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i] || {};
+        const title = String(row.title || '').trim();
+        const data = String(row.data || '').trim();
+
+        const createdAt =
+          parseImportedDate(row.createdAt)
+          ?? parseImportedDate(row.date)
+          ?? null;
+
+        if (!createdAt) {
+          skipped.push({ index: i, reason: 'invalid_date' });
+          continue;
+        }
+
+        if (!title && !data) {
+          skipped.push({ index: i, reason: 'empty' });
+          continue;
+        }
+
+        imported.push({
+          title: title || t('profile.import.untitled'),
+          body: plainTextToHtml(data),
+          createdAt,
+          updatedAt: createdAt,
+        });
+      }
+
+      const res = await importEntries(user.uid, imported);
+      setImportResult({
+        rows: rows.length,
+        imported: res.imported,
+        skipped: skipped.length,
+      });
+    } catch (e) {
+      setImportError(e?.message || String(e));
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -238,6 +341,51 @@ export default function ProfilePage({ user, profile, onBack }) {
           <Divider />
 
           <Card>
+            <CardHeader title={t('profile.import.title')} />
+            <CardContent>
+              <Stack spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('profile.import.hint')}
+                </Typography>
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Button variant="outlined" component="label" disabled={!user?.uid || importLoading}>
+                    {t('profile.import.chooseFile')}
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      hidden
+                      onChange={handlePickImportFile}
+                    />
+                  </Button>
+                  <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                    {importFile ? importFile.name : t('profile.import.noFile')}
+                  </Typography>
+                </Stack>
+
+                {importError && <Alert severity="error">{importError}</Alert>}
+                {importResult && (
+                  <Alert severity="success">
+                    {t('profile.import.result', {
+                      rows: importResult.rows,
+                      imported: importResult.imported,
+                      skipped: importResult.skipped,
+                    })}
+                  </Alert>
+                )}
+
+                <Button
+                  variant="contained"
+                  onClick={handleImport}
+                  disabled={!user?.uid || importLoading || !importFile}
+                >
+                  {t('profile.import.import')}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader title={t('profile.account')} />
             <CardContent>
               <Stack spacing={2}>
@@ -266,39 +414,6 @@ export default function ProfilePage({ user, profile, onBack }) {
                 {!isEmailVerified && (
                   <Alert severity="warning">{t('profile.verifyRequiredToManageAccount')}</Alert>
                 )}
-
-                <TextField
-                  label={t('profile.newEmail')}
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  disabled={!isEmailVerified}
-                  fullWidth
-                />
-                <TextField
-                  label={t('profile.currentPassword')}
-                  type="password"
-                  value={currentPasswordForEmail}
-                  onChange={(e) => setCurrentPasswordForEmail(e.target.value)}
-                  disabled={!isEmailVerified}
-                  fullWidth
-                />
-                {emailError && <Alert severity="error">{emailError}</Alert>}
-                {emailSaved && <Alert severity="success">OK</Alert>}
-                <Button
-                  variant="contained"
-                  onClick={handleUpdateEmail}
-                  disabled={
-                    !isEmailVerified
-                    || emailLoading
-                    || !newEmail.trim()
-                    || !currentPasswordForEmail
-                  }
-                >
-                  {t('profile.updateEmail')}
-                </Button>
-
-                <Divider />
 
                 <TextField
                   label={t('profile.newPassword')}
