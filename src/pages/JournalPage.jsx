@@ -209,6 +209,11 @@ export default function JournalPage({
       return;
     }
 
+    if (isEditing && !isDirty && !isUnsavedNewEntry) {
+      setIsEditing(false);
+      return;
+    }
+
     const isEmptyDraft = !draftTitle.trim() && !stripHtmlToText(draftBody).trim();
     if (isEmptyDraft && user?.uid && selectedEntryId) {
       try {

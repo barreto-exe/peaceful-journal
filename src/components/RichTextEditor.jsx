@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Divider, IconButton, Paper, Tooltip } from '@mui/material';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Tooltip,
+} from '@mui/material';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
 import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined';
@@ -61,6 +74,8 @@ export default function RichTextEditor({
   });
 
   const [, forceRerender] = useState(0);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkHref, setLinkHref] = useState('');
 
   useEffect(() => {
     if (!editor) return undefined;
@@ -85,27 +100,40 @@ export default function RichTextEditor({
       editor.commands.setContent(next, false);
     }
   }, [editor, value]);
-
-  const handleToggleLink = () => {
+  const handleOpenLinkDialog = () => {
     if (!editor) return;
-
     const currentHref = editor.getAttributes('link')?.href || '';
-    const url = window.prompt('URL', currentHref);
+    setLinkHref(currentHref);
+    setLinkOpen(true);
+  };
 
-    if (url === null) return; // cancelled
-
-    const trimmed = String(url).trim();
-    if (!trimmed) {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+  const handleSaveLink = () => {
+    if (!editor) {
+      setLinkOpen(false);
       return;
     }
-
+    const trimmed = (linkHref || '').trim();
+    if (!trimmed) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      setLinkOpen(false);
+      return;
+    }
     editor
       .chain()
       .focus()
       .extendMarkRange('link')
       .setLink({ href: trimmed })
       .run();
+    setLinkOpen(false);
+  };
+
+  const handleRemoveLink = () => {
+    if (!editor) {
+      setLinkOpen(false);
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    setLinkOpen(false);
   };
 
   return (
@@ -185,7 +213,7 @@ export default function RichTextEditor({
             <Tooltip title="Link">
               <IconButton
                 size="small"
-                onClick={handleToggleLink}
+                onClick={handleOpenLinkDialog}
                 color={editor.isActive('link') ? 'primary' : 'default'}
               >
                 <LinkIcon fontSize="small" />
@@ -234,6 +262,33 @@ export default function RichTextEditor({
 
         <EditorContent editor={editor} />
       </Box>
+
+      <Dialog open={linkOpen} onClose={() => setLinkOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Insertar enlace</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1} sx={{ pt: 1 }}>
+            <TextField
+              label="URL"
+              value={linkHref}
+              onChange={(e) => setLinkHref(e.target.value)}
+              placeholder="https://example.com"
+              autoFocus
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLinkOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Button onClick={handleRemoveLink} color="inherit">
+            Quitar
+          </Button>
+          <Button onClick={handleSaveLink} variant="contained">
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
