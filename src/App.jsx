@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
-import { AppBar, Box, Button, Container, Toolbar, Typography } from '@mui/material';
-import LogoutIcon from '@mui/icons-material/Logout';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import LoginPage from './pages/LoginPage.jsx';
 import { auth } from './firebase.js';
+import JournalPage from './pages/JournalPage.jsx';
+import { subscribeProfile } from './data/journalDb.js';
+import ProfilePage from './pages/ProfilePage.jsx';
+import { useTranslation } from 'react-i18next';
 
 export default function App() {
+  const { i18n } = useTranslation();
   const [user, setUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const hasSession = Boolean(user);
+  const [profile, setProfile] = useState(null);
+  const [view, setView] = useState('journal');
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (current) => {
@@ -17,6 +22,24 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setProfile(null);
+      return undefined;
+    }
+    const unsub = subscribeProfile(user.uid, setProfile);
+    return () => unsub();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const nextLocale = profile?.locale;
+    if (!nextLocale) return;
+    if (i18n.language === nextLocale) return;
+
+    window.localStorage.setItem('pj.lang', nextLocale);
+    i18n.changeLanguage(nextLocale);
+  }, [profile?.locale, i18n]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -32,27 +55,22 @@ export default function App() {
     );
   }
 
-  return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar position="static" color="primary">
-        <Toolbar sx={{ gap: 2 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Peaceful Journal
-          </Typography>
-          <Button color="inherit" onClick={handleLogout} startIcon={<LogoutIcon />}>
-            Salir
-          </Button>
-        </Toolbar>
-      </AppBar>
+  if (view === 'profile') {
+    return (
+      <ProfilePage
+        user={user}
+        profile={profile}
+        onBack={() => setView('journal')}
+      />
+    );
+  }
 
-      <Container maxWidth="md" sx={{ py: 6 }}>
-        <Typography variant="h4" gutterBottom>
-          Bienvenido
-        </Typography>
-        <Typography color="text.secondary">
-          Estás autenticado como {user?.email}.
-        </Typography>
-      </Container>
-    </Box>
+  return (
+    <JournalPage
+      user={user}
+      profile={profile}
+      onLogout={handleLogout}
+      onOpenProfile={() => setView('profile')}
+    />
   );
 }

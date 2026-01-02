@@ -16,9 +16,11 @@ import {
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import { auth } from '../firebase.js';
 
 export default function LoginPage({ onSuccess }) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState('login');
@@ -47,11 +49,11 @@ export default function LoginPage({ onSuccess }) {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'grid', placeItems: 'center', p: 2 }}>
       <Card sx={{ maxWidth: 420, width: '100%' }}>
-        <CardHeader title="Peaceful Journal" subheader="Autenticación con Firebase" />
+        <CardHeader title={t('auth.title')} subheader={t('auth.subtitle')} />
         <CardContent>
           <Stack component="form" spacing={2} onSubmit={handleSubmit}>
             <TextField
-              label="Email"
+              label={t('auth.email')}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -60,7 +62,7 @@ export default function LoginPage({ onSuccess }) {
               fullWidth
             />
             <TextField
-              label="Contraseña"
+              label={t('auth.password')}
               type={showPwd ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -70,7 +72,11 @@ export default function LoginPage({ onSuccess }) {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPwd((v) => !v)} edge="end" aria-label="toggle password">
+                    <IconButton
+                      onClick={() => setShowPwd((v) => !v)}
+                      edge="end"
+                      aria-label={t('auth.togglePassword')}
+                    >
                       {showPwd ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -79,12 +85,12 @@ export default function LoginPage({ onSuccess }) {
             />
             {error && <Alert severity="error">{error}</Alert>}
             <Button type="submit" variant="contained" size="large" disabled={loading}>
-              {mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+              {mode === 'login' ? t('auth.login') : t('auth.signup')}
             </Button>
             <Typography variant="body2" color="text.secondary">
-              {mode === 'login' ? '¿Sin cuenta?' : '¿Ya tienes cuenta?'}{' '}
+              {mode === 'login' ? t('auth.noAccount') : t('auth.haveAccount')}{' '}
               <Link component="button" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-                {mode === 'login' ? 'Crear una cuenta' : 'Iniciar sesión'}
+                {mode === 'login' ? t('auth.createAccount') : t('auth.signIn')}
               </Link>
             </Typography>
           </Stack>

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import App from './App.jsx';
 import theme from './theme.js';
+import './i18n.js';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
