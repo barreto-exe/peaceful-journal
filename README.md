@@ -1,6 +1,6 @@
 # Peaceful Journal
 
-App de journaling web (React 19 + Vite 7 + MUI 6) con Firebase Realtime Database y autenticación Email/Password.
+App mínima con React 19 + Vite 7 + MUI 6 y autenticación Firebase Email/Password. Tras iniciar sesión solo muestra una pantalla de bienvenida con barra superior y botón de salir.
 
 ## Requisitos
 - Node 20+
@@ -25,34 +25,15 @@ npm run dev
 
 ## Arquitectura
 - `src/main.jsx`: monta `<App/>` con `ThemeProvider` y `CssBaseline`.
-- `src/firebase.js`: inicializa Firebase App, Auth y Database leyendo `import.meta.env.VITE_*`.
-- `src/App.jsx`: controla sesión de Firebase Auth, gestión de espacio/ID (persistido en `localStorage`), tabs de navegación y suscripciones en tiempo real con `onValue` a `entries` y `groups`.
-- Componentes clave:
-  - `LoginPage`: login/registro con Email/Password.
-  - `SpaceSelector`: unirse/crear ID corto de espacio (6 chars A-Z,2-9) y persistirlo.
-  - `EntryList`: CRUD de entradas con edición inline, chips de estado, switches `ready/done`, scroll en listas largas.
-  - `BatchEntryPanel`: alta masiva por líneas.
-  - `GroupsManager`: crea/renombra/borra grupos y administra membresías con checkboxes.
-  - `Dashboard`: resumen vivo, toggles de estado diario.
-
-## Modelo de datos (Realtime Database)
-```
-root/{SPACE_ID}/
-  entries/{entryId}: {
-    title, content, date, mood, ready, done, createdAt
-  }
-  groups/{groupId}: {
-    name, memberIds: []
-  }
-```
-Suscripciones en tiempo real con `onValue` sobre `entries` y `groups`. Escrituras con `push`, `set`, `update`, `remove`.
+- `src/firebase.js`: inicializa Firebase App y Auth leyendo `import.meta.env.VITE_*`.
+- `src/App.jsx`: escucha el estado de Auth y muestra:
+  - Si no hay sesión: `LoginPage` (registro/login).
+  - Si hay sesión: AppBar con botón “Salir” y un mensaje de bienvenida con el email del usuario.
+- `src/pages/LoginPage.jsx`: formulario de login/registro Email/Password.
 
 ## Autenticación
 - Email/Password via `firebase/auth`.
-- Botón de logout limpia el espacio y cierra sesión.
-
-## Reglas de DB (dev ejemplo)
-`database.rules.json` contiene reglas abiertas para desarrollo. Endurece antes de producción (usa auth y validaciones más estrictas).
+- Botón de logout cierra sesión.
 
 ## Deploy Firebase Hosting
 1) Build:
@@ -66,10 +47,7 @@ firebase deploy --only hosting
 ```
 
 ## CI/CD (GitHub Actions)
-- Workflow `.github/workflows/deploy.yml` se ejecuta en `push` a `main`.
-- Usa `npm ci` + `npm run build` con `VITE_*` desde GitHub Secrets.
-- Deploy con `FirebaseExtended/action-hosting-deploy@v0` usando `FIREBASE_SERVICE_ACCOUNT` y `VITE_FIREBASE_PROJECT_ID`.
+- Workflows `.github/workflows/firebase-hosting-merge.yml` y `.github/workflows/firebase-hosting-pull-request.yml` ejecutan `npm ci && npm run build` con variables `VITE_*` desde secrets y despliegan con `FirebaseExtended/action-hosting-deploy@v0`.
 
 ## Notas
 - Las claves `VITE_*` se exponen en cliente; protege datos sensibles con reglas de DB.
-- El ID de espacio se guarda en `localStorage`; "Salir" limpia y regresa a bienvenida.
