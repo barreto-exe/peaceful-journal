@@ -1,37 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
-  Button,
-  Card,
-  Divider,
   Drawer,
   IconButton,
-  ListItemButton,
-  Stack,
   Toolbar,
-  Typography,
   useMediaQuery,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import 'dayjs/locale/en';
 import { useTranslation } from 'react-i18next';
 import TwoStepConfirmDialog from '../components/TwoStepConfirmDialog.jsx';
 import TopNavBar from '../components/TopNavBar.jsx';
-import RichTextEditor from '../components/RichTextEditor.jsx';
+import { useTwoStepDialog } from '../hooks/useTwoStepDialog.js';
+import EntryEditorView from './journal/EntryEditorView.jsx';
+import EntryListView from './journal/EntryListView.jsx';
+import JournalDrawer from './journal/JournalDrawer.jsx';
 import {
   createEntry,
   deleteEntry,
@@ -39,51 +28,12 @@ import {
   saveEntry,
   subscribeEntriesForDate,
 } from '../data/journalDb.js';
+import { getUserInitials } from '../utils/user.js';
+import { stripHtmlToText } from '../utils/text.js';
+import { formatTime, mergeDayAndTime } from '../utils/datetime.js';
 
 // Slightly wider to fit the calendar without causing horizontal overflow
 const drawerWidth = 360;
-
-function initialsForUser(user, displayName) {
-  const name = (displayName || '').trim();
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] || '';
-    const second = parts[1]?.[0] || '';
-    return (first + second).toUpperCase() || '?';
-  }
-  const email = user?.email || '';
-  return (email[0] || '?').toUpperCase();
-}
-
-function formatTime(ts, lang) {
-  if (!ts) return '';
-  try {
-    let time = new Date(ts).toLocaleTimeString(lang, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    time = time
-      .replace(/\s*a\.?\s*m\.?/iu, ' AM')
-      .replace(/\s*p\.?\s*m\.?/iu, ' PM');
-
-    return time;
-  } catch {
-    return '';
-  }
-}
-
-function stripHtmlToText(input) {
-  if (!input) return '';
-  try {
-    if (typeof window === 'undefined' || !window.DOMParser) return String(input);
-    const doc = new window.DOMParser().parseFromString(String(input), 'text/html');
-    return (doc.body?.textContent || '').replace(/\s+$/u, '');
-  } catch {
-    return String(input);
-  }
-}
 
 export default function JournalPage({
   user,
@@ -109,11 +59,21 @@ export default function JournalPage({
   const [entryTime, setEntryTime] = useState(() => dayjs());
   const [saving, setSaving] = useState(false);
 
-  const [discardOpen, setDiscardOpen] = useState(false);
-  const [discardStep, setDiscardStep] = useState(1);
+  const {
+    open: discardOpen,
+    step: discardStep,
+    openDialog: openDiscardDialog,
+    closeDialog: closeDiscardDialog,
+    continueToStep2: continueDiscardToStep2,
+  } = useTwoStepDialog();
 
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteStep, setDeleteStep] = useState(1);
+  const {
+    open: deleteOpen,
+    step: deleteStep,
+    openDialog: openDeleteDialog,
+    closeDialog: closeDeleteDialog,
+    continueToStep2: continueDeleteToStep2,
+  } = useTwoStepDialog();
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -134,10 +94,19 @@ export default function JournalPage({
     return () => unsub();
   }, [user?.uid, dateKey]);
 
-  const selectedEntry = useMemo(
-    () => entries.find((e) => e.id === selectedEntryId) || null,
-    [entries, selectedEntryId],
-  );
+  const entriesById = useMemo(() => {
+    /** @type {Record<string, any>} */
+    const map = Object.create(null);
+    for (const entry of entries) {
+      map[entry.id] = entry;
+    }
+    return map;
+  }, [entries]);
+
+  const selectedEntry = useMemo(() => {
+    if (!selectedEntryId) return null;
+    return entriesById[selectedEntryId] || null;
+  }, [entriesById, selectedEntryId]);
 
   useEffect(() => {
     if (!selectedEntry) {
@@ -165,6 +134,16 @@ export default function JournalPage({
     ),
   );
 
+  const selectedEntryBodyText = useMemo(
+    () => stripHtmlToText(selectedEntry?.body || '').trim(),
+    [selectedEntry?.body],
+  );
+
+  const draftBodyText = useMemo(
+    () => stripHtmlToText(draftBody).trim(),
+    [draftBody],
+  );
+
   const handleCreateEntry = useCallback(async () => {
     if (!user?.uid) return;
     const created = await createEntry(user.uid, dateKey);
@@ -179,12 +158,7 @@ export default function JournalPage({
     if (!user?.uid || !selectedEntryId) return;
     setSaving(true);
     try {
-      const mergedTime = selectedDay
-        .hour(entryTime?.hour() || 0)
-        .minute(entryTime?.minute() || 0)
-        .second(entryTime?.second() || 0)
-        .millisecond(0)
-        .valueOf();
+      const mergedTime = mergeDayAndTime(selectedDay, entryTime);
 
       await saveEntry(user.uid, dateKey, selectedEntryId, {
         title: draftTitle,
@@ -201,14 +175,13 @@ export default function JournalPage({
 
   const handleOpenDiscard = useCallback(() => {
     if (!selectedEntryId) return;
-    setDiscardStep(1);
-    setDiscardOpen(true);
-  }, [selectedEntryId]);
+    openDiscardDialog();
+  }, [selectedEntryId, openDiscardDialog]);
 
   const isUnsavedNewEntry = Boolean(
     selectedEntry &&
       (selectedEntry.title || '') === '' &&
-      !stripHtmlToText(selectedEntry.body || '').trim() &&
+      !selectedEntryBodyText &&
       selectedEntry.createdAt &&
       selectedEntry.updatedAt &&
       selectedEntry.createdAt === selectedEntry.updatedAt,
@@ -226,7 +199,7 @@ export default function JournalPage({
       return;
     }
 
-    const isEmptyDraft = !draftTitle.trim() && !stripHtmlToText(draftBody).trim();
+    const isEmptyDraft = !draftTitle.trim() && !draftBodyText;
     if (isEmptyDraft && user?.uid && selectedEntryId) {
       try {
         await deleteEntry(user.uid, dateKey, selectedEntryId);
@@ -243,12 +216,7 @@ export default function JournalPage({
     }
 
     setSelectedEntryId(null);
-  }, [selectedEntry, isEditing, isDirty, isUnsavedNewEntry, user?.uid, selectedEntryId, draftTitle, draftBody, entryTime, selectedDay, dateKey, handleOpenDiscard]);
-
-  const handleCloseDiscard = useCallback(() => {
-    setDiscardOpen(false);
-    setDiscardStep(1);
-  }, []);
+  }, [selectedEntry, isEditing, isDirty, isUnsavedNewEntry, user?.uid, selectedEntryId, draftTitle, draftBodyText, dateKey, handleOpenDiscard]);
 
   const handleConfirmDiscard = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
@@ -265,20 +233,14 @@ export default function JournalPage({
         setIsEditing(false);
       }
     } finally {
-      handleCloseDiscard();
+      closeDiscardDialog();
     }
-  }, [user?.uid, selectedEntryId, isUnsavedNewEntry, selectedEntry, dateKey, handleCloseDiscard]);
+  }, [user?.uid, selectedEntryId, isUnsavedNewEntry, selectedEntry, dateKey, closeDiscardDialog]);
 
   const handleOpenDelete = useCallback(() => {
     if (!selectedEntryId) return;
-    setDeleteStep(1);
-    setDeleteOpen(true);
-  }, [selectedEntryId]);
-
-  const handleCloseDelete = useCallback(() => {
-    setDeleteOpen(false);
-    setDeleteStep(1);
-  }, []);
+    openDeleteDialog();
+  }, [selectedEntryId, openDeleteDialog]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
@@ -287,9 +249,9 @@ export default function JournalPage({
       setSelectedEntryId(null);
       setIsEditing(false);
     } finally {
-      handleCloseDelete();
+      closeDeleteDialog();
     }
-  }, [user?.uid, selectedEntryId, dateKey, handleCloseDelete]);
+  }, [user?.uid, selectedEntryId, dateKey, closeDeleteDialog]);
 
   const handleHardwareBack = useCallback(async () => {
     if (mobileOpen) {
@@ -298,12 +260,12 @@ export default function JournalPage({
     }
 
     if (discardOpen) {
-      handleCloseDiscard();
+      closeDiscardDialog();
       return true;
     }
 
     if (deleteOpen) {
-      handleCloseDelete();
+      closeDeleteDialog();
       return true;
     }
 
@@ -313,14 +275,13 @@ export default function JournalPage({
     }
 
     return false;
-  }, [mobileOpen, discardOpen, deleteOpen, selectedEntryId, handleBack, handleCloseDiscard, handleCloseDelete]);
+  }, [mobileOpen, discardOpen, closeDiscardDialog, deleteOpen, closeDeleteDialog, selectedEntryId, handleBack]);
 
   useEffect(() => {
     if (selectedEntry && !isUnsavedNewEntry) {
       setIsEditing(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEntryId]);
+  }, [selectedEntryId, selectedEntry, isUnsavedNewEntry]);
 
   useEffect(() => {
     if (!registerBackHandler) return undefined;
@@ -330,37 +291,37 @@ export default function JournalPage({
   }, [registerBackHandler, handleHardwareBack]);
 
   const drawer = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2 }}>
-        <Button fullWidth variant="outlined" onClick={() => setSelectedDay(dayjs())}>
-          {t('journal.today')}
-        </Button>
-        <Button
-          fullWidth
-          sx={{ mt: 1 }}
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleCreateEntry}
-        >
-          {t('journal.createEntry')}
-        </Button>
-
-        <Divider sx={{ my: 2 }} />
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={i18n.language}>
-          <DateCalendar
-            value={selectedDay}
-            onChange={(v) => v && setSelectedDay(v)}
-            slotProps={{ calendarHeader: { sx: { textTransform: 'capitalize' } } }}
-          />
-        </LocalizationProvider>
-      </Box>
-    </Box>
+    <JournalDrawer
+      t={t}
+      selectedDay={selectedDay}
+      onSelectDay={setSelectedDay}
+      onToday={() => setSelectedDay(dayjs())}
+      onCreateEntry={handleCreateEntry}
+      locale={i18n.language}
+    />
   );
 
-  const avatarText = initialsForUser(user, profile?.displayName);
+  const avatarText = getUserInitials(user, profile?.displayName);
   const dayNumber = selectedDay.format('DD');
   const monthYear = selectedDay.format('MMMM YYYY');
   const weekday = selectedDay.format('dddd');
+
+  const entriesForList = useMemo(() => {
+    const lang = i18n.language;
+
+    return entries.map((entry) => {
+      const title = entry.title?.trim() ? entry.title : t('journal.untitled');
+      const bodyPreview = entry.body ? stripHtmlToText(entry.body).trim() : '';
+      const timeLabel = formatTime(entry.createdAt, lang);
+
+      return {
+        id: entry.id,
+        title,
+        bodyPreview,
+        timeLabel,
+      };
+    });
+  }, [entries, i18n.language, t]);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex' }}>
@@ -438,194 +399,33 @@ export default function JournalPage({
         <Toolbar />
 
         {!selectedEntry ? (
-          <Box sx={{ width: '100%', maxWidth: { xs: '100%', md: 960, lg: 1100 }, mx: 'auto' }}>
-            <Card sx={{ width: '100%' }}>
-              <Box sx={{ px: 4, py: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                  <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                    {dayNumber + ' '} 
-                  </Box>
-                    {monthYear},
-                  <Box component="span" sx={{ color: 'text.secondary', textTransform: 'capitalize', ml: 0.5 }}>
-                    {weekday}
-                  </Box>
-                </Typography>
-
-                <IconButton
-                  aria-label={t('journal.createEntry')}
-                  onClick={handleCreateEntry}
-                  sx={{ border: '2px solid', borderColor: 'divider' }}
-                >
-                  <AddIcon />
-                </IconButton>
-              </Box>
-
-              <Divider />
-
-              {entries.length === 0 ? (
-                <Box sx={{ p: 4 }}>
-                  <Typography variant="subtitle1">{t('journal.noEntriesTitle')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('journal.noEntriesBody')}
-                  </Typography>
-                </Box>
-              ) : (
-                <Box>
-                  {entries.map((entry, idx) => {
-                    const title = entry.title?.trim() ? entry.title : t('journal.untitled');
-                    const bodyPreview = entry.body ? stripHtmlToText(entry.body).trim() : '';
-                    const timeLabel = formatTime(entry.createdAt, i18n.language);
-
-                    return (
-                      <Box key={entry.id}>
-                        <ListItemButton onClick={() => setSelectedEntryId(entry.id)} sx={{ alignItems: 'flex-start' }}>
-                          <Box sx={{ p: 2, width: '100%' }}>
-                            <Typography variant="h7" sx={{ color: 'primary.main', fontWeight: 700, mb: 0.5 }}>
-                              {timeLabel}
-                            </Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                              {title}
-                            </Typography>
-                            {bodyPreview ? (
-                              <Typography
-                                variant="body1"
-                                color="text.secondary"
-                                sx={{
-                                  display: '-webkit-box',
-                                  WebkitLineClamp: 5,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
-                                  whiteSpace: 'pre-line',
-                                }}
-                              >
-                                {bodyPreview}
-                              </Typography>
-                            ) : null}
-                          </Box>
-                        </ListItemButton>
-                        {idx < entries.length - 1 ? <Divider /> : null}
-                      </Box>
-                    );
-                  })}
-                </Box>
-              )}
-            </Card>
-          </Box>
+          <EntryListView
+            t={t}
+            dayNumber={dayNumber}
+            monthYear={monthYear}
+            weekday={weekday}
+            entries={entriesForList}
+            onCreateEntry={handleCreateEntry}
+            onSelectEntry={setSelectedEntryId}
+          />
         ) : (
-          <Box
-            sx={{
-              width: '100%',
-              maxWidth: { xs: '100%', md: 960, lg: 1100 },
-              mx: 'auto',
-              p: { xs: 2, sm: 0 },
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0,
-            }}
-          >
-            <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Button startIcon={<ArrowBackIcon />} onClick={handleBack} color="inherit">
-                  {t('common.back')}
-                </Button>
-                <Box sx={{ minWidth: 160 }}>
-                  <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={i18n.language}>
-                    <TimePicker
-                      label={t('journal.timeLabel')}
-                      value={entryTime}
-                      onChange={(v) => v && setEntryTime(v)}
-                      disabled={!isEditing}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                    />
-                  </LocalizationProvider>
-                </Box>
-              </Stack>
-
-              <Box
-                component="input"
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                placeholder={t('journal.titleLabel')}
-                readOnly={!isEditing}
-                style={{
-                  width: '100%',
-                  fontSize: '1.6rem',
-                  fontWeight: 700,
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
-                }}
-              />
-
-              <Box
-                sx={{
-                  width: '100%',
-                  flex: 1,
-                  minHeight: 0,
-                  fontSize: '1rem',
-                  lineHeight: 1.6,
-                  overflowY: 'auto',
-                }}
-              >
-                {isEditing ? (
-                  <RichTextEditor
-                    value={draftBody}
-                    onChange={(html) => setDraftBody(html)}
-                    placeholder={t('journal.bodyLabel')}
-                    ariaLabel={t('journal.bodyLabel')}
-                    readOnly={false}
-                    showToolbar
-                  />
-                ) : (
-                  <RichTextEditor
-                    value={draftBody}
-                    placeholder={t('journal.bodyLabel')}
-                    ariaLabel={t('journal.bodyLabel')}
-                    readOnly
-                    showToolbar={false}
-                  />
-                )}
-              </Box>
-
-              <Stack
-                direction="row"
-                spacing={1}
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{
-                  position: { xs: 'sticky', md: 'static' },
-                  bottom: 0,
-                  py: { xs: 1, md: 0 },
-                  px: { xs: 1, md: 0 },
-                  bgcolor: { xs: 'background.default', md: 'transparent' },
-                  borderTop: { xs: '1px solid', md: 'none' },
-                  borderColor: 'divider',
-                  zIndex: 2,
-                }}
-              >
-                <Button color="error" startIcon={<DeleteIcon />} onClick={handleOpenDelete} disabled={saving}>
-                  {t('journal.delete')}
-                </Button>
-                {isEditing ? (
-                  <Stack direction="row" spacing={1}>
-                    <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
-                      {t('journal.save')}
-                    </Button>
-                  </Stack>
-                ) : (
-                  <Button
-                    variant="contained"
-                    startIcon={<EditIcon />}
-                    onClick={() => setIsEditing(true)}
-                    color="primary"
-                  >
-                    {t('journal.edit') || 'Editar'}
-                  </Button>
-                )}
-              </Stack>
-            </Stack>
-          </Box>
+          <EntryEditorView
+            t={t}
+            locale={i18n.language}
+            draftTitle={draftTitle}
+            onChangeTitle={setDraftTitle}
+            draftBody={draftBody}
+            onChangeBody={setDraftBody}
+            entryTime={entryTime}
+            onChangeTime={setEntryTime}
+            isEditing={isEditing}
+            onStartEditing={() => setIsEditing(true)}
+            isDirty={isDirty}
+            saving={saving}
+            onBack={handleBack}
+            onSave={handleSave}
+            onDelete={handleOpenDelete}
+          />
         )}
       </Box>
 
@@ -639,8 +439,8 @@ export default function JournalPage({
         cancelLabel={t('journal.cancel')}
         continueLabel={t('journal.continue')}
         confirmLabel={t('journal.confirm')}
-        onCancel={handleCloseDiscard}
-        onContinue={() => setDiscardStep(2)}
+        onCancel={closeDiscardDialog}
+        onContinue={continueDiscardToStep2}
         onConfirm={handleConfirmDiscard}
       />
 
@@ -654,8 +454,8 @@ export default function JournalPage({
         cancelLabel={t('journal.cancel')}
         continueLabel={t('journal.continue')}
         confirmLabel={t('journal.confirm')}
-        onCancel={handleCloseDelete}
-        onContinue={() => setDeleteStep(2)}
+        onCancel={closeDeleteDialog}
+        onContinue={continueDeleteToStep2}
         onConfirm={handleConfirmDelete}
       />
     </Box>

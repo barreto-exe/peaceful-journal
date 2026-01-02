@@ -12,24 +12,13 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import TopNavBar from '../components/TopNavBar.jsx';
 import { useTranslation } from 'react-i18next';
-
-function initialsForUser(user, displayName) {
-  const name = (displayName || '').trim();
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] || '';
-    const second = parts[1]?.[0] || '';
-    return (first + second).toUpperCase() || '?';
-  }
-  const email = user?.email || '';
-  return (email[0] || '?').toUpperCase();
-}
+import { getUserInitials } from '../utils/user.js';
 
 export default function AboutPage({ user, profile, onBack }) {
   const { t } = useTranslation();
 
   const avatarText = useMemo(
-    () => initialsForUser(user, profile?.displayName),
+    () => getUserInitials(user, profile?.displayName),
     [user, profile?.displayName],
   );
 

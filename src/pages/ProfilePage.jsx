@@ -24,18 +24,7 @@ import {
 } from 'firebase/auth';
 import { upsertProfile } from '../data/journalDb.js';
 import TopNavBar from '../components/TopNavBar.jsx';
-
-function initialsForUser(user, displayName) {
-  const name = (displayName || '').trim();
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] || '';
-    const second = parts[1]?.[0] || '';
-    return (first + second).toUpperCase() || '?';
-  }
-  const email = user?.email || '';
-  return (email[0] || '?').toUpperCase();
-}
+import { getUserInitials } from '../utils/user.js';
 
 export default function ProfilePage({ user, profile, onBack }) {
   const { t, i18n } = useTranslation();
@@ -64,7 +53,7 @@ export default function ProfilePage({ user, profile, onBack }) {
   }, [profile?.displayName, profile?.locale, i18n.language]);
 
   const avatarText = useMemo(
-    () => initialsForUser(user, profile?.displayName || displayName),
+    () => getUserInitials(user, profile?.displayName || displayName),
     [user, profile?.displayName, displayName],
   );
 
