@@ -548,17 +548,27 @@ export default function JournalPage({
                 )}
               </Box>
 
-              <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{
+                  position: { xs: 'sticky', md: 'static' },
+                  bottom: 0,
+                  py: { xs: 1, md: 0 },
+                  px: { xs: 1, md: 0 },
+                  bgcolor: { xs: 'background.default', md: 'transparent' },
+                  borderTop: { xs: '1px solid', md: 'none' },
+                  borderColor: 'divider',
+                  zIndex: 2,
+                }}
+              >
                 <Button color="error" startIcon={<DeleteIcon />} onClick={handleOpenDelete} disabled={saving}>
                   {t('journal.delete')}
                 </Button>
                 {isEditing ? (
                   <Stack direction="row" spacing={1}>
-                    {isDirty || isUnsavedNewEntry ? (
-                      <Button onClick={handleOpenDiscard} color="inherit">
-                        {t('journal.discard')}
-                      </Button>
-                    ) : null}
                     <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
                       {t('journal.save')}
                     </Button>
