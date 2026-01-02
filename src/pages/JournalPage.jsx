@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -18,6 +18,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -89,6 +90,8 @@ export default function JournalPage({
   profile,
   onLogout,
   onOpenProfile,
+  onOpenAbout,
+  registerBackHandler,
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -162,7 +165,7 @@ export default function JournalPage({
     ),
   );
 
-  const handleCreateEntry = async () => {
+  const handleCreateEntry = useCallback(async () => {
     if (!user?.uid) return;
     const created = await createEntry(user.uid, dateKey);
     setSelectedEntryId(created.id);
@@ -170,9 +173,9 @@ export default function JournalPage({
     if (!isDesktop) {
       setMobileOpen(false);
     }
-  };
+  }, [user?.uid, dateKey, isDesktop]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
     setSaving(true);
     try {
@@ -194,15 +197,24 @@ export default function JournalPage({
     } finally {
       setSaving(false);
     }
-  };
+  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, dateKey]);
 
-  const handleOpenDiscard = () => {
+  const handleOpenDiscard = useCallback(() => {
     if (!selectedEntryId) return;
     setDiscardStep(1);
     setDiscardOpen(true);
-  };
+  }, [selectedEntryId]);
 
-  const handleBack = async () => {
+  const isUnsavedNewEntry = Boolean(
+    selectedEntry &&
+      (selectedEntry.title || '') === '' &&
+      !stripHtmlToText(selectedEntry.body || '').trim() &&
+      selectedEntry.createdAt &&
+      selectedEntry.updatedAt &&
+      selectedEntry.createdAt === selectedEntry.updatedAt,
+  );
+
+  const handleBack = useCallback(async () => {
     if (!selectedEntry) {
       setSelectedEntryId(null);
       setIsEditing(false);
@@ -231,23 +243,14 @@ export default function JournalPage({
     }
 
     setSelectedEntryId(null);
-  };
+  }, [selectedEntry, isEditing, isDirty, isUnsavedNewEntry, user?.uid, selectedEntryId, draftTitle, draftBody, entryTime, selectedDay, dateKey, handleOpenDiscard]);
 
-  const handleCloseDiscard = () => {
+  const handleCloseDiscard = useCallback(() => {
     setDiscardOpen(false);
     setDiscardStep(1);
-  };
+  }, []);
 
-  const isUnsavedNewEntry = Boolean(
-    selectedEntry &&
-      (selectedEntry.title || '') === '' &&
-      !stripHtmlToText(selectedEntry.body || '').trim() &&
-      selectedEntry.createdAt &&
-      selectedEntry.updatedAt &&
-      selectedEntry.createdAt === selectedEntry.updatedAt,
-  );
-
-  const handleConfirmDiscard = async () => {
+  const handleConfirmDiscard = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
 
     try {
@@ -264,20 +267,20 @@ export default function JournalPage({
     } finally {
       handleCloseDiscard();
     }
-  };
+  }, [user?.uid, selectedEntryId, isUnsavedNewEntry, selectedEntry, dateKey, handleCloseDiscard]);
 
-  const handleOpenDelete = () => {
+  const handleOpenDelete = useCallback(() => {
     if (!selectedEntryId) return;
     setDeleteStep(1);
     setDeleteOpen(true);
-  };
+  }, [selectedEntryId]);
 
-  const handleCloseDelete = () => {
+  const handleCloseDelete = useCallback(() => {
     setDeleteOpen(false);
     setDeleteStep(1);
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
     try {
       await deleteEntry(user.uid, dateKey, selectedEntryId);
@@ -286,7 +289,31 @@ export default function JournalPage({
     } finally {
       handleCloseDelete();
     }
-  };
+  }, [user?.uid, selectedEntryId, dateKey, handleCloseDelete]);
+
+  const handleHardwareBack = useCallback(async () => {
+    if (mobileOpen) {
+      setMobileOpen(false);
+      return true;
+    }
+
+    if (discardOpen) {
+      handleCloseDiscard();
+      return true;
+    }
+
+    if (deleteOpen) {
+      handleCloseDelete();
+      return true;
+    }
+
+    if (selectedEntryId) {
+      await handleBack();
+      return true;
+    }
+
+    return false;
+  }, [mobileOpen, discardOpen, deleteOpen, selectedEntryId, handleBack, handleCloseDiscard, handleCloseDelete]);
 
   useEffect(() => {
     if (selectedEntry && !isUnsavedNewEntry) {
@@ -294,6 +321,13 @@ export default function JournalPage({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntryId]);
+
+  useEffect(() => {
+    if (!registerBackHandler) return undefined;
+
+    const unregister = registerBackHandler(handleHardwareBack);
+    return () => unregister?.();
+  }, [registerBackHandler, handleHardwareBack]);
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -346,6 +380,12 @@ export default function JournalPage({
             label: t('nav.profile'),
             icon: <PersonIcon fontSize="small" style={{ marginRight: 8 }} />,
             onClick: () => onOpenProfile?.(),
+          },
+          {
+            key: 'about',
+            label: t('nav.about'),
+            icon: <InfoOutlinedIcon fontSize="small" style={{ marginRight: 8 }} />,
+            onClick: () => onOpenAbout?.(),
           },
           {
             key: 'logout',

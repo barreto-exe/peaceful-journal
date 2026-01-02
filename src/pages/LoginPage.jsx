@@ -94,6 +94,10 @@ export default function LoginPage({ onSuccess }) {
               </Link>
             </Typography>
           </Stack>
+
+          <Typography variant="caption" color="text.secondary" display="block" align="center" sx={{ mt: 2 }}>
+            {t('common.rights')}
+          </Typography>
         </CardContent>
       </Card>
     </Box>

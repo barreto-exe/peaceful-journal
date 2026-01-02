@@ -7,7 +7,7 @@ const resources = {
       appName: 'Peaceful Journal',
       auth: {
         title: 'Peaceful Journal',
-        subtitle: 'Autenticación con Firebase',
+        subtitle: 'Tu espacio privado para escribir con calma',
         email: 'Email',
         password: 'Contraseña',
         login: 'Entrar',
@@ -21,6 +21,7 @@ const resources = {
       nav: {
         logout: 'Salir',
         profile: 'Perfil',
+        about: 'Acerca de',
       },
       journal: {
         today: 'Hoy',
@@ -63,6 +64,28 @@ const resources = {
       },
       common: {
         back: 'Volver',
+        rights: '© 2026 Luis Barreto — Desarrollador full stack .NET y creador de Peaceful Journal.',
+      },
+      about: {
+        title: 'Acerca de Peaceful Journal',
+        tagline: 'Un diario sencillo y sereno para tus pensamientos.',
+        intro: 'Peaceful Journal te acompaña a escribir con calma cada día, guardando tus notas para que regreses a ellas cuando quieras.',
+        sections: {
+          features: {
+            title: 'Qué puedes hacer',
+            entries: 'Crear, editar y eliminar tus entradas diarias con un calendario integrado.',
+            editor: 'Escribir con un editor cómodo que te permite resaltar ideas y organizar párrafos.',
+            profile: 'Guardar tu nombre para personalizar la experiencia y mostrar tus iniciales.',
+            account: 'Actualizar tu correo o contraseña desde un mismo lugar.',
+            language: 'Elegir entre español e inglés; la app recordará tu preferencia.',
+          },
+          data: {
+            title: 'Datos y privacidad',
+            storage: 'Tus notas son personales y se guardan asociadas a tu cuenta.',
+            security: 'Solo tú puedes ver y gestionar tu diario al iniciar sesión.',
+            environment: 'La aplicación está pensada para uso personal; mantén seguras tus credenciales.',
+          },
+        },
       },
     },
   },
@@ -71,7 +94,7 @@ const resources = {
       appName: 'Peaceful Journal',
       auth: {
         title: 'Peaceful Journal',
-        subtitle: 'Firebase authentication',
+        subtitle: 'A calm, private space for your notes',
         email: 'Email',
         password: 'Password',
         login: 'Sign in',
@@ -85,6 +108,7 @@ const resources = {
       nav: {
         logout: 'Sign out',
         profile: 'Profile',
+        about: 'About',
       },
       journal: {
         today: 'Today',
@@ -127,6 +151,28 @@ const resources = {
       },
       common: {
         back: 'Back',
+        rights: '© 2026 Luis Barreto — Full stack .NET developer and creator of Peaceful Journal.',
+      },
+      about: {
+        title: 'About Peaceful Journal',
+        tagline: 'A simple, serene journal for your thoughts.',
+        intro: 'Peaceful Journal helps you write at your own pace every day and revisit your notes whenever you need.',
+        sections: {
+          features: {
+            title: 'What you can do',
+            entries: 'Create, edit, and delete your daily entries with a built-in calendar.',
+            editor: 'Write with a comfortable editor that helps you highlight ideas and organize paragraphs.',
+            profile: 'Store your name to personalize the experience and avatar initials.',
+            account: 'Update your email or password from one place.',
+            language: 'Choose between Spanish and English; the app remembers your preference.',
+          },
+          data: {
+            title: 'Data and privacy',
+            storage: 'Your notes are personal and stored with your account.',
+            security: 'Only you can see and manage your journal after signing in.',
+            environment: 'The app is designed for personal use; keep your credentials safe.',
+          },
+        },
       },
     },
   },
