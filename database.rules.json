@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "$space": {
+      ".read": true,
+      ".write": true,
+      "entries": {
+        "$entryId": {
+          ".validate": "newData.hasChildren(['title', 'date'])"
+        }
+      },
+      "groups": {
+        "$groupId": {
+          ".validate": "newData.hasChildren(['name'])"
+        }
+      }
+    }
+  }
+}
