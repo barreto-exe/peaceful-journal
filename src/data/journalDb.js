@@ -87,6 +87,35 @@ export function subscribeEntriesForDate(uid, dateKey, onChange) {
 }
 
 /**
+ * Subscribes to the set of days (dateKeys) that have at least one entry.
+ *
+ * Data shape: entries/{uid}/{YYYY-MM-DD}/{entryId}
+ *
+ * @param {string} uid
+ * @param {(dateKeys: string[]) => void} onChange
+ * @returns {import('firebase/database').Unsubscribe}
+ */
+export function subscribeEntryDayKeys(uid, onChange) {
+  const rootRef = ref(db, `entries/${uid}`);
+  return onValue(rootRef, (snapshot) => {
+    const val = snapshot.val();
+    if (!val || typeof val !== 'object') {
+      onChange([]);
+      return;
+    }
+
+    const dateKeys = Object.keys(val).filter((dateKey) => {
+      const dayBucket = val[dateKey];
+      if (!dayBucket || typeof dayBucket !== 'object') return false;
+      return Object.keys(dayBucket).length > 0;
+    });
+
+    dateKeys.sort();
+    onChange(dateKeys);
+  });
+}
+
+/**
  * @param {string} uid
  * @param {string} dateKey
  * @returns {Promise<{id: string} & Required<Pick<Entry,'title'|'body'|'createdAt'|'updatedAt'>>}

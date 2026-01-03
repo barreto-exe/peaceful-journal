@@ -26,6 +26,7 @@ import {
   deleteEntry,
   formatDateKey,
   saveEntry,
+  subscribeEntryDayKeys,
   subscribeEntriesForDate,
 } from '../data/journalDb.js';
 import { getUserInitials } from '../utils/user.js';
@@ -53,6 +54,8 @@ export default function JournalPage({
 
   const [entries, setEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
+
+  const [daysWithEntries, setDaysWithEntries] = useState(() => new Set());
 
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
@@ -93,6 +96,19 @@ export default function JournalPage({
     });
     return () => unsub();
   }, [user?.uid, dateKey]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setDaysWithEntries(new Set());
+      return undefined;
+    }
+
+    const unsub = subscribeEntryDayKeys(user.uid, (dateKeys) => {
+      setDaysWithEntries(new Set(dateKeys));
+    });
+
+    return () => unsub();
+  }, [user?.uid]);
 
   const entriesById = useMemo(() => {
     /** @type {Record<string, any>} */
@@ -298,6 +314,7 @@ export default function JournalPage({
       onToday={() => setSelectedDay(dayjs())}
       onCreateEntry={handleCreateEntry}
       locale={i18n.language}
+      daysWithEntries={daysWithEntries}
     />
   );
 
