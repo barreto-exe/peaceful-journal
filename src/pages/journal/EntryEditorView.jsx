@@ -3,13 +3,15 @@ import {
   Box,
   Button,
   Chip,
+  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -71,6 +73,44 @@ export default function EntryEditorView({
 }) {
   const bodyContainerRef = useRef(null);
 
+  const [tagInputValue, setTagInputValue] = useState('');
+
+  const normalizeTags = useCallback((values) => {
+    const next = (values || [])
+      .map((v) => String(v || '').trim())
+      .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
+      .filter(Boolean);
+    // Deduplicate (case-insensitive)
+    const seen = new Set();
+    /** @type {string[]} */
+    const unique = [];
+    for (const tag of next) {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(tag);
+    }
+    return unique;
+  }, []);
+
+  const canAddTag = useMemo(() => {
+    const cleaned = String(tagInputValue || '').trim();
+    if (!cleaned) return false;
+    const tag = cleaned.startsWith('#') ? cleaned.slice(1).trim() : cleaned;
+    if (!tag) return false;
+    const existing = (draftTags || []).some((t) => String(t).toLowerCase() === tag.toLowerCase());
+    return !existing;
+  }, [tagInputValue, draftTags]);
+
+  const commitTagFromInput = useCallback(() => {
+    const raw = String(tagInputValue || '').trim();
+    const cleaned = raw.startsWith('#') ? raw.slice(1).trim() : raw;
+    if (!cleaned) return;
+    const next = normalizeTags([...(draftTags || []), cleaned]);
+    onChangeTags(next);
+    setTagInputValue('');
+  }, [tagInputValue, draftTags, normalizeTags, onChangeTags]);
+
   const moodOptions = [
     { key: 'terrible', emoji: '😢', label: t('journal.moodTerrible') },
     { key: 'gloomy', emoji: '🙁', label: t('journal.moodGloomy') },
@@ -106,46 +146,46 @@ export default function EntryEditorView({
         width: '100%',
         maxWidth: { xs: '100%', md: 960, lg: 1100 },
         mx: 'auto',
-        p: { xs: 2, sm: 0 },
+        p: { xs: 2, sm: 2 },
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
       }}
     >
-      <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
+      <Stack sx={{ flex: 1, minHeight: 0 }}>
         <Stack
-          direction="row"
-          alignItems="center"
+          direction={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
           justifyContent="space-between"
-          sx={{ gap: 1, flexWrap: 'wrap' }}
+          sx={{
+            gap: 2,
+            rowGap: 1.2,
+            flexWrap: { xs: 'wrap', sm: 'nowrap' },
+            overflowX: 'visible',
+          }}
         >
-          <Button startIcon={<ArrowBackIcon />} onClick={onBack} color="inherit">
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={onBack}
+            color="inherit"
+            sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+          >
             {t('common.back')}
           </Button>
 
-          <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 320 } }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             {isEditing ? (
               <Autocomplete
                 multiple
                 freeSolo
                 options={availableTags || []}
                 value={draftTags || []}
+                inputValue={tagInputValue}
+                sx={{ minWidth: 0 }}
+                onInputChange={(_, v) => setTagInputValue(v)}
                 onChange={(_, value) => {
-                  const next = (value || [])
-                    .map((v) => String(v || '').trim())
-                    .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
-                    .filter(Boolean);
-                  // Deduplicate (case-insensitive)
-                  const seen = new Set();
-                  const unique = [];
-                  for (const tag of next) {
-                    const key = tag.toLowerCase();
-                    if (seen.has(key)) continue;
-                    seen.add(key);
-                    unique.push(tag);
-                  }
-                  onChangeTags(unique);
+                  onChangeTags(normalizeTags(value || []));
                 }}
                 renderTags={(value, getTagProps) =>
                   value.map((option, index) => (
@@ -165,6 +205,30 @@ export default function EntryEditorView({
                     size="small"
                     label={t('journal.tagsLabel')}
                     placeholder={t('journal.tagsPlaceholder')}
+                    fullWidth
+                    onKeyDown={(e) => {
+                      if (e.key === ',' && canAddTag) {
+                        e.preventDefault();
+                        commitTagFromInput();
+                      }
+                    }}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          <IconButton
+                            size="small"
+                            onClick={commitTagFromInput}
+                            disabled={!canAddTag}
+                            aria-label={t('journal.tagsLabel')}
+                            edge="end"
+                          >
+                            <AddIcon fontSize="small" />
+                          </IconButton>
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
                   />
                 )}
               />
@@ -186,7 +250,7 @@ export default function EntryEditorView({
             ) : null}
           </Box>
 
-          <Box sx={{ width: 'fit-content' }}>
+          <Box sx={{ width: { xs: '100%', sm: 'fit-content' }, flexShrink: 0 }}>
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={locale}>
               <TimePicker
                 label={t('journal.timeLabel')}
@@ -197,10 +261,10 @@ export default function EntryEditorView({
                   textField: {
                     size: 'small',
                     sx: {
-                      width: 'fit-content',
+                      width: { xs: '100%', sm: 'fit-content' },
                       minWidth: 0,
-                      '& .MuiInputBase-root': { width: 'fit-content' },
-                      '& .MuiInputBase-input': { width: '6.5ch' },
+                      '& .MuiInputBase-root': { width: { xs: '100%', sm: 'fit-content' } },
+                      '& .MuiInputBase-input': { width: { xs: '100%', sm: '6.5ch' } },
                     },
                   },
                 }}
@@ -209,7 +273,7 @@ export default function EntryEditorView({
           </Box>
         </Stack>
 
-        <Box>
+        <Box sx={{ my: 2 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
             {t('journal.moodLabel')}
           </Typography>
@@ -219,8 +283,9 @@ export default function EntryEditorView({
               display: 'flex',
               gap: 1,
               pb: 0.5,
-              flexWrap: { xs: 'wrap', sm: 'nowrap' },
-              overflowX: { xs: 'visible', sm: 'auto' },
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
             {moodOptions.map((m) => {
@@ -239,11 +304,11 @@ export default function EntryEditorView({
                     }
                   }}
                   sx={{
-                    flex: { xs: '1 1 calc(20% - 8px)', sm: '0 0 auto' },
+                    flex: '0 0 auto',
                     minWidth: { xs: 64, sm: 88 },
                     px: { xs: 0.75, sm: 1 },
                     py: { xs: 0.75, sm: 0.9 },
-                    borderRadius: 999,
+                    borderRadius: 1.25,
                     border: 'none',
                     bgcolor: selected
                       ? (theme) => alpha(theme.palette.success.main, 0.12)
@@ -326,6 +391,8 @@ export default function EntryEditorView({
             width: '100%',
             fontSize: '1.6rem',
             fontWeight: 700,
+            padding: 0,
+            margin: '1rem 0 0 0',
             border: 'none',
             outline: 'none',
             background: 'transparent',
@@ -356,7 +423,7 @@ export default function EntryEditorView({
               ariaLabel={t('journal.bodyLabel')}
               readOnly={false}
               showToolbar
-              contentPadding={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}
+              contentPadding={{ px: 0, py: { xs: 1, sm: 1.5 } }}
             />
           ) : (
             <RichTextEditor
@@ -365,7 +432,7 @@ export default function EntryEditorView({
               ariaLabel={t('journal.bodyLabel')}
               readOnly
               showToolbar={false}
-              contentPadding={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}
+              contentPadding={{ px: 0, py: { xs: 1, sm: 1.5 } }}
             />
           )}
         </Box>
@@ -379,7 +446,7 @@ export default function EntryEditorView({
             position: { xs: 'sticky', md: 'static' },
             bottom: 0,
             py: { xs: 1, md: 0 },
-            px: { xs: 1, md: 0 },
+            px: { xs: 2, md: 0 },
             bgcolor: { xs: 'background.default', md: 'transparent' },
             borderTop: { xs: '1px solid', md: 'none' },
             borderColor: 'divider',

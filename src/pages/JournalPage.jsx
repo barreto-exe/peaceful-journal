@@ -492,10 +492,9 @@ export default function JournalPage({
     if (!user?.uid || !selectedEntryId) return;
 
     try {
-      // If this is a new empty entry, treat discard as cancel creation.
-      const savedIsEmpty = !String(selectedEntry?.title || '').trim() && !stripHtmlToText(selectedEntry?.body || '').trim() && !(selectedEntry?.tags?.length) && !String(selectedEntry?.mood || '');
-      const localIsEmpty = !draftTitle.trim() && !stripHtmlToText(draftBody || '').trim() && normalizeTags(draftTags).length === 0 && !String(draftMood || '');
-      if (savedIsEmpty && localIsEmpty) {
+      // If this is a newly created (unsaved) entry, discarding should cancel creation.
+      // Otherwise we'd end up with an empty entry on the main list after deleting autosave.
+      if (isUnsavedNewEntry) {
         await deleteEntry(user.uid, editingDateKey || dateKey, selectedEntryId);
       } else {
         // Discard only this tab's autosave; do not touch shared draft.
@@ -508,7 +507,7 @@ export default function JournalPage({
     } finally {
       closeDiscardDialog();
     }
-  }, [user?.uid, selectedEntryId, selectedEntry, dateKey, editingDateKey, closeDiscardDialog, draftTitle, draftBody, draftTags, draftMood, normalizeTags, sessionId]);
+  }, [user?.uid, selectedEntryId, isUnsavedNewEntry, dateKey, editingDateKey, closeDiscardDialog, sessionId]);
 
   const handleOpenDelete = useCallback(() => {
     if (!selectedEntryId) return;
