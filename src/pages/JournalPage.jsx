@@ -142,6 +142,7 @@ export default function JournalPage({
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
   const [draftTags, setDraftTags] = useState(() => []);
+  const [draftMood, setDraftMood] = useState('');
   const [entryTime, setEntryTime] = useState(() => dayjs());
   const [saving, setSaving] = useState(false);
 
@@ -212,12 +213,14 @@ export default function JournalPage({
       setDraftTitle('');
       setDraftBody('');
       setDraftTags([]);
+      setDraftMood('');
       setEntryTime(dayjs());
       return;
     }
     setDraftTitle(selectedEntry.title || '');
     setDraftBody(selectedEntry.body || '');
     setDraftTags(normalizeTags(selectedEntry.tags));
+    setDraftMood(String(selectedEntry.mood || ''));
     setEntryTime(dayjs(selectedEntry.createdAt || Date.now()));
   }, [selectedEntryId, selectedEntry, normalizeTags]);
 
@@ -232,6 +235,7 @@ export default function JournalPage({
       draftTitle !== (selectedEntry.title || '') ||
       draftBody !== (selectedEntry.body || '') ||
       normalizeTags(draftTags).join('\n').toLowerCase() !== normalizeTags(selectedEntry.tags).join('\n').toLowerCase() ||
+      String(draftMood || '') !== String(selectedEntry.mood || '') ||
       (entryTime && selectedEntry.createdAt !== entryTime.valueOf())
     ),
   );
@@ -266,6 +270,7 @@ export default function JournalPage({
         title: draftTitle,
         body: draftBody,
         tags: normalizeTags(draftTags),
+        mood: draftMood ? String(draftMood) : '',
         createdAt: mergedTime,
       });
       // Return to "home" (entries list) after finishing
@@ -274,7 +279,7 @@ export default function JournalPage({
     } finally {
       setSaving(false);
     }
-  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, draftTags, dateKey, normalizeTags]);
+  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, dateKey, normalizeTags]);
 
   const handleOpenDiscard = useCallback(() => {
     if (!selectedEntryId) return;
@@ -443,12 +448,32 @@ export default function JournalPage({
   const entriesForList = useMemo(() => {
     const lang = i18n.language;
 
+    const moodMeta = (moodKey) => {
+      const key = String(moodKey || '');
+      if (!key) return null;
+      switch (key) {
+        case 'terrible':
+          return { emoji: '😢', label: t('journal.moodTerrible') };
+        case 'gloomy':
+          return { emoji: '🙁', label: t('journal.moodGloomy') };
+        case 'fine':
+          return { emoji: '😐', label: t('journal.moodFine') };
+        case 'good':
+          return { emoji: '🙂', label: t('journal.moodGood') };
+        case 'great':
+          return { emoji: '😄', label: t('journal.moodGreat') };
+        default:
+          return null;
+      }
+    };
+
     return filteredEntries.map((entry) => {
       const title = entry.title?.trim() ? entry.title : t('journal.untitled');
       const bodyPreviewHtml = entry.body ? htmlToPreviewHtml(entry.body) : '';
       const timeLabel = formatTime(entry.createdAt, lang);
 
       const tags = normalizeTags(entry.tags);
+      const mood = moodMeta(entry.mood);
 
       return {
         id: entry.id,
@@ -456,6 +481,8 @@ export default function JournalPage({
         bodyPreviewHtml,
         timeLabel,
         tags,
+        moodLabel: mood?.label || '',
+        moodEmoji: mood?.emoji || '',
       };
     });
   }, [filteredEntries, i18n.language, t, normalizeTags]);
@@ -556,6 +583,8 @@ export default function JournalPage({
             draftTags={draftTags}
             onChangeTags={setDraftTags}
             availableTags={availableTags}
+            draftMood={draftMood}
+            onChangeMood={setDraftMood}
             entryTime={entryTime}
             onChangeTime={setEntryTime}
             isEditing={isEditing}

@@ -20,6 +20,7 @@ import {
  *  title?: string,
  *  body?: string,
  *  tags?: string[],
+ *  mood?: string,
  *  createdAt?: number,
  *  updatedAt?: number,
  * }} Entry

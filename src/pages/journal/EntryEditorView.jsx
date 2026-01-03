@@ -30,6 +30,8 @@ import RichTextEditor from '../../components/RichTextEditor.jsx';
  *  draftTags: string[],
  *  onChangeTags: (tags: string[]) => void,
  *  availableTags: string[],
+ *  draftMood: string,
+ *  onChangeMood: (mood: string) => void,
  *  entryTime: Dayjs,
  *  onChangeTime: (v: Dayjs) => void,
  *  isEditing: boolean,
@@ -51,6 +53,8 @@ export default function EntryEditorView({
   draftTags,
   onChangeTags,
   availableTags,
+  draftMood,
+  onChangeMood,
   entryTime,
   onChangeTime,
   isEditing,
@@ -61,6 +65,14 @@ export default function EntryEditorView({
   onSave,
   onDelete,
 }) {
+  const moodOptions = [
+    { key: 'terrible', emoji: '😢', label: t('journal.moodTerrible') },
+    { key: 'gloomy', emoji: '🙁', label: t('journal.moodGloomy') },
+    { key: 'fine', emoji: '😐', label: t('journal.moodFine') },
+    { key: 'good', emoji: '🙂', label: t('journal.moodGood') },
+    { key: 'great', emoji: '😄', label: t('journal.moodGreat') },
+  ];
+
   return (
     <Box
       sx={{
@@ -92,28 +104,11 @@ export default function EntryEditorView({
           </Box>
         </Stack>
 
-        <Box
-          component="input"
-          value={draftTitle}
-          onChange={(e) => onChangeTitle(e.target.value)}
-          placeholder={t('journal.titleLabel')}
-          readOnly={!isEditing}
-          style={{
-            width: '100%',
-            fontSize: '1.6rem',
-            fontWeight: 700,
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-          }}
-        />
-
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
-            {t('journal.tagsLabel')}
-          </Typography>
-
-          {isEditing ? (
+        {isEditing ? (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
+              {t('journal.tagsLabel')}
+            </Typography>
             <Autocomplete
               multiple
               freeSolo
@@ -155,18 +150,86 @@ export default function EntryEditorView({
                 />
               )}
             />
-          ) : draftTags?.length ? (
+          </Box>
+        ) : draftTags?.length ? (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
+              {t('journal.tagsLabel')}
+            </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {draftTags.map((tag) => (
                 <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
               ))}
             </Box>
-          ) : (
-            <Typography variant="body2" color="text.disabled">
-              {t('journal.noTags')}
-            </Typography>
-          )}
+          </Box>
+        ) : null}
+
+        <Box sx={{ mt: isEditing || draftTags?.length ? 0 : 0 }}>
+          <Typography variant="subtitle2" sx={{ mt: isEditing ? 2 : 0, mb: 1 }} color="text.secondary">
+            {t('journal.moodLabel')}
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 0.5 }}>
+            {moodOptions.map((m) => {
+              const selected = String(draftMood || '') === m.key;
+              const disabled = !isEditing;
+              return (
+                <Box
+                  key={m.key}
+                  onClick={disabled ? undefined : () => onChangeMood(selected ? '' : m.key)}
+                  role={disabled ? undefined : 'button'}
+                  tabIndex={disabled ? undefined : 0}
+                  onKeyDown={disabled ? undefined : (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onChangeMood(selected ? '' : m.key);
+                    }
+                  }}
+                  sx={{
+                    minWidth: 120,
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: 3,
+                    border: '2px solid',
+                    borderColor: selected ? 'secondary.main' : 'divider',
+                    bgcolor: selected ? 'background.paper' : 'action.hover',
+                    cursor: disabled ? 'default' : 'pointer',
+                    userSelect: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    opacity: disabled ? 0.75 : 1,
+                  }}
+                  aria-label={m.label}
+                  aria-disabled={disabled ? 'true' : undefined}
+                >
+                  <Box sx={{ fontSize: 34, lineHeight: 1, mb: 0.5 }}>{m.emoji}</Box>
+                  <Typography variant="caption" sx={{ fontWeight: 700, textAlign: 'center' }}>
+                    {m.label}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
         </Box>
+
+        <Box
+          component="input"
+          value={draftTitle}
+          onChange={(e) => onChangeTitle(e.target.value)}
+          placeholder={t('journal.titleLabel')}
+          readOnly={!isEditing}
+          style={{
+            width: '100%',
+            fontSize: '1.6rem',
+            fontWeight: 700,
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+          }}
+        />
 
         <Box
           sx={{

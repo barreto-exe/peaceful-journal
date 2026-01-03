@@ -16,6 +16,8 @@ import AddIcon from '@mui/icons-material/Add';
  *  bodyPreviewHtml: string,
  *  timeLabel: string,
  *  tags?: string[],
+ *  moodLabel?: string,
+ *  moodEmoji?: string,
  * }} EntryListItem
  */
 
@@ -77,26 +79,14 @@ export default function EntryListView({
               <Box key={entry.id}>
                 <ListItemButton onClick={() => onSelectEntry(entry.id)} sx={{ alignItems: 'flex-start' }}>
                   <Box sx={{ p: 2, width: '100%' }}>
+                    
                     <Typography variant="h7" sx={{ color: 'primary.main', fontWeight: 700, mb: 0.5 }}>
                       {entry.timeLabel}
                     </Typography>
+
                     <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
                       {entry.title}
                     </Typography>
-
-                    {entry.tags?.length ? (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-                        {entry.tags.map((tag) => (
-                          <Chip
-                            key={tag}
-                            size="small"
-                            variant="outlined"
-                            color="secondary"
-                            label={tag}
-                          />
-                        ))}
-                      </Box>
-                    ) : null}
 
                     {entry.bodyPreviewHtml ? (
                       <Typography
@@ -117,6 +107,31 @@ export default function EntryListView({
                         dangerouslySetInnerHTML={{ __html: entry.bodyPreviewHtml }}
                       />
                     ) : null}
+
+                    {entry.moodLabel || entry.tags?.length ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, my: 1 }}>
+                        {entry.moodLabel ? (
+                          <Chip
+                            size="small"
+                            color="secondary"
+                            variant="filled"
+                            label={`${entry.moodEmoji ? entry.moodEmoji + ' ' : ''}${entry.moodLabel}`}
+                            sx={{ fontWeight: 700 }}
+                          />
+                        ) : null}
+
+                        {entry.tags?.map((tag) => (
+                          <Chip
+                            key={tag}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            label={tag}
+                          />
+                        ))}
+                      </Box>
+                    ) : null}
+
                   </Box>
                 </ListItemButton>
                 {idx < entries.length - 1 ? <Divider /> : null}
