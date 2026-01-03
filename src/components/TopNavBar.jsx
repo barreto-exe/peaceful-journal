@@ -24,6 +24,22 @@ export default function TopNavBar({
 
   const hasMenu = Boolean(menuItems?.length);
 
+  const brandTitle = (
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, minWidth: 0, px: 1 }}>
+      <Box
+        component="span"
+        role="img"
+        aria-label="sun"
+        sx={{ fontSize: '1.35rem', lineHeight: 1, flexShrink: 0 }}
+      >
+        ☀️
+      </Box>
+      <Typography variant="h6" component="span" noWrap sx={{ minWidth: 0 }}>
+        {title}
+      </Typography>
+    </Box>
+  );
+
   return (
     <AppBar position="fixed" color="primary" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
       <Toolbar sx={{ gap: 1 }}>
@@ -32,13 +48,13 @@ export default function TopNavBar({
         {onTitleClick ? (
           <Box sx={{ flexGrow: 1, display: 'flex' }}>
             <Button color="inherit" onClick={onTitleClick} sx={{ px: 0, minWidth: 0 }}>
-              <Typography variant="h6">{title}</Typography>
+              {brandTitle}
             </Button>
           </Box>
         ) : (
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            {title}
-          </Typography>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            {brandTitle}
+          </Box>
         )}
 
         {avatarText ? (

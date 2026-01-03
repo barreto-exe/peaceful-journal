@@ -8,6 +8,8 @@ const resources = {
       auth: {
         title: 'Peaceful Journal',
         subtitle: 'Tu espacio privado para escribir con calma',
+        loginTitle: 'Iniciar sesión',
+        signupTitle: 'Registrarse',
         email: 'Email',
         password: 'Contraseña',
         login: 'Entrar',
@@ -121,6 +123,8 @@ const resources = {
       auth: {
         title: 'Peaceful Journal',
         subtitle: 'A calm, private space for your notes',
+        loginTitle: 'Sign in',
+        signupTitle: 'Create account',
         email: 'Email',
         password: 'Password',
         login: 'Sign in',

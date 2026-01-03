@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   IconButton,
   InputAdornment,
   Link,
@@ -18,6 +17,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
 import { auth } from '../firebase.js';
+import sunnyday from '../assets/sunnyday.svg';
 
 export default function LoginPage({ onSuccess }) {
   const { t } = useTranslation();
@@ -46,11 +46,42 @@ export default function LoginPage({ onSuccess }) {
     }
   };
 
+  const cardTitle = mode === 'login' ? t('auth.loginTitle') : t('auth.signupTitle');
+
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'grid', placeItems: 'center', p: 2 }}>
-      <Card sx={{ maxWidth: 420, width: '100%' }}>
-        <CardHeader title={t('auth.title')} subheader={t('auth.subtitle')} />
-        <CardContent>
+    <Box
+      sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'grid', placeItems: 'center', p: 2 }}
+    >
+      <Box
+        sx={{ width: '100%', maxWidth: 520, display: 'grid', justifyItems: 'center', gap: { xs: 1, sm: 1.5 } }}
+      >
+        <Stack spacing={0.5} alignItems="center" sx={{ textAlign: 'center' }}>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ minWidth: 0 }}>
+            <Box component="span" role="img" aria-label="sun" sx={{ fontSize: '2.5rem', lineHeight: 1 }}>
+              ☀️
+            </Box>
+            <Typography variant="h5" component="span" noWrap>
+              {t('auth.title')}
+            </Typography>
+          </Stack>
+
+          <Typography variant="body1" color="text.secondary" sx={{ textWrap: 'balance' }}>
+            {t('auth.subtitle')}
+          </Typography>
+        </Stack>
+
+        <Box
+          component="img"
+          src={sunnyday}
+          alt={t('auth.title')}
+          sx={{ my: { xs: 1, sm: 2 }, width: { xs: 240, sm: 300 }, height: 'auto', maxHeight: { xs: 180, sm: 250 } }}
+        />
+
+        <Card sx={{ maxWidth: 420, width: '100%' }}>
+          <CardContent>
+            <Typography variant="h6" align="center" sx={{ mb: 2 }}>
+              {cardTitle}
+            </Typography>
           <Stack component="form" spacing={2} onSubmit={handleSubmit}>
             <TextField
               label={t('auth.email')}
@@ -98,8 +129,9 @@ export default function LoginPage({ onSuccess }) {
           <Typography variant="caption" color="text.secondary" display="block" align="center" sx={{ mt: 2 }}>
             {t('common.rights')}
           </Typography>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   );
 }
