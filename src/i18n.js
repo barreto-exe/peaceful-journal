@@ -49,6 +49,10 @@ const resources = {
         deleteStep2Body: 'Esta acción no se puede deshacer.',
         timeLabel: 'Hora',
         edit: 'Editar',
+        tagsLabel: 'Etiquetas',
+        tagsPlaceholder: 'Agrega etiquetas (Enter)…',
+        searchTags: 'Buscar etiquetas…',
+        noTags: 'Sin etiquetas',
       },
       profile: {
         title: 'Perfil',
@@ -147,6 +151,10 @@ const resources = {
         deleteStep2Body: 'This action cannot be undone.',
         timeLabel: 'Time',
         edit: 'Edit',
+        tagsLabel: 'Tags',
+        tagsPlaceholder: 'Add tags (Enter)…',
+        searchTags: 'Search tags…',
+        noTags: 'No tags',
       },
       profile: {
         title: 'Profile',

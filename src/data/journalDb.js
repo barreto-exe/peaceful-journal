@@ -19,6 +19,7 @@ import {
  * @typedef {{
  *  title?: string,
  *  body?: string,
+ *  tags?: string[],
  *  createdAt?: number,
  *  updatedAt?: number,
  * }} Entry
@@ -83,6 +84,24 @@ export function subscribeEntriesForDate(uid, dateKey, onChange) {
     }
 
     onChange(entries);
+  });
+}
+
+/**
+ * Subscribes to the full entries tree for a user.
+ * Useful for lightweight metadata (e.g. tag lists, day markers).
+ *
+ * Data shape: entries/{uid}/{YYYY-MM-DD}/{entryId}
+ *
+ * @param {string} uid
+ * @param {(tree: any | null) => void} onChange
+ * @returns {import('firebase/database').Unsubscribe}
+ */
+export function subscribeEntriesTree(uid, onChange) {
+  const rootRef = ref(db, `entries/${uid}`);
+  return onValue(rootRef, (snapshot) => {
+    const val = snapshot.val();
+    onChange(val && typeof val === 'object' ? val : null);
   });
 }
 

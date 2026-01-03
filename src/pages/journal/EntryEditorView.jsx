@@ -1,7 +1,11 @@
 import {
+  Autocomplete,
   Box,
   Button,
+  Chip,
   Stack,
+  TextField,
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -23,6 +27,9 @@ import RichTextEditor from '../../components/RichTextEditor.jsx';
  *  onChangeTitle: (v: string) => void,
  *  draftBody: string,
  *  onChangeBody: (html: string) => void,
+ *  draftTags: string[],
+ *  onChangeTags: (tags: string[]) => void,
+ *  availableTags: string[],
  *  entryTime: Dayjs,
  *  onChangeTime: (v: Dayjs) => void,
  *  isEditing: boolean,
@@ -41,6 +48,9 @@ export default function EntryEditorView({
   onChangeTitle,
   draftBody,
   onChangeBody,
+  draftTags,
+  onChangeTags,
+  availableTags,
   entryTime,
   onChangeTime,
   isEditing,
@@ -97,6 +107,66 @@ export default function EntryEditorView({
             background: 'transparent',
           }}
         />
+
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
+            {t('journal.tagsLabel')}
+          </Typography>
+
+          {isEditing ? (
+            <Autocomplete
+              multiple
+              freeSolo
+              options={availableTags || []}
+              value={draftTags || []}
+              onChange={(_, value) => {
+                const next = (value || [])
+                  .map((v) => String(v || '').trim())
+                  .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
+                  .filter(Boolean);
+                // Deduplicate (case-insensitive)
+                const seen = new Set();
+                const unique = [];
+                for (const tag of next) {
+                  const key = tag.toLowerCase();
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  unique.push(tag);
+                }
+                onChangeTags(unique);
+              }}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    label={option}
+                    {...getTagProps({ index })}
+                    key={`${option}-${index}`}
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  placeholder={t('journal.tagsPlaceholder')}
+                />
+              )}
+            />
+          ) : draftTags?.length ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {draftTags.map((tag) => (
+                <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.disabled">
+              {t('journal.noTags')}
+            </Typography>
+          )}
+        </Box>
 
         <Box
           sx={{

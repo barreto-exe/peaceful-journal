@@ -1,6 +1,7 @@
 import {
   Box,
   Card,
+  Chip,
   Divider,
   IconButton,
   ListItemButton,
@@ -14,6 +15,7 @@ import AddIcon from '@mui/icons-material/Add';
  *  title: string,
  *  bodyPreviewHtml: string,
  *  timeLabel: string,
+ *  tags?: string[],
  * }} EntryListItem
  */
 
@@ -81,6 +83,21 @@ export default function EntryListView({
                     <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
                       {entry.title}
                     </Typography>
+
+                    {entry.tags?.length ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                        {entry.tags.map((tag) => (
+                          <Chip
+                            key={tag}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            label={tag}
+                          />
+                        ))}
+                      </Box>
+                    ) : null}
+
                     {entry.bodyPreviewHtml ? (
                       <Typography
                         variant="body1"

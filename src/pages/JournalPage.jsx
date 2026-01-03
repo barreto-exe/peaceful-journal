@@ -26,8 +26,8 @@ import {
   deleteEntry,
   formatDateKey,
   saveEntry,
-  subscribeEntryDayKeys,
   subscribeEntriesForDate,
+  subscribeEntriesTree,
 } from '../data/journalDb.js';
 import { getUserInitials } from '../utils/user.js';
 import { htmlToPreviewHtml, stripHtmlToText } from '../utils/text.js';
@@ -55,10 +55,93 @@ export default function JournalPage({
   const [entries, setEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
 
-  const [daysWithEntries, setDaysWithEntries] = useState(() => new Set());
+  const [entriesTree, setEntriesTree] = useState(null);
+  const [activeTags, setActiveTags] = useState(() => new Set());
+
+  const normalizeTag = useCallback((tag) => {
+    const v = String(tag || '').trim();
+    if (!v) return '';
+    return v.startsWith('#') ? v.slice(1).trim() : v;
+  }, []);
+
+  const normalizeTags = useCallback((tags) => {
+    if (!Array.isArray(tags)) return [];
+    /** @type {string[]} */
+    const out = [];
+    const seen = new Set();
+    for (const raw of tags) {
+      const cleaned = normalizeTag(raw);
+      if (!cleaned) continue;
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(cleaned);
+    }
+    return out;
+  }, [normalizeTag]);
+
+  const availableTags = useMemo(() => {
+    if (!entriesTree || typeof entriesTree !== 'object') return [];
+    const map = new Map();
+
+    for (const dateKey of Object.keys(entriesTree)) {
+      const dayBucket = entriesTree[dateKey];
+      if (!dayBucket || typeof dayBucket !== 'object') continue;
+
+      for (const entryId of Object.keys(dayBucket)) {
+        const entry = dayBucket[entryId];
+        const tags = normalizeTags(entry?.tags);
+        for (const tag of tags) {
+          const k = tag.toLowerCase();
+          if (!map.has(k)) map.set(k, tag);
+        }
+      }
+    }
+
+    const tags = Array.from(map.values());
+    tags.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    return tags;
+  }, [entriesTree, normalizeTags]);
+
+  const daysWithEntries = useMemo(() => {
+    const set = new Set();
+    if (!entriesTree || typeof entriesTree !== 'object') return set;
+
+    const active = Array.from(activeTags).map((t) => normalizeTag(t)).filter(Boolean);
+    const activeLower = active.map((t) => t.toLowerCase());
+    const hasActive = activeLower.length > 0;
+
+    for (const dateKey of Object.keys(entriesTree)) {
+      const dayBucket = entriesTree[dateKey];
+      if (!dayBucket || typeof dayBucket !== 'object') continue;
+
+      let matches = false;
+      for (const entryId of Object.keys(dayBucket)) {
+        const entry = dayBucket[entryId];
+        if (!entry || typeof entry !== 'object') continue;
+
+        if (!hasActive) {
+          matches = true;
+          break;
+        }
+
+        const tags = normalizeTags(entry.tags).map((t) => t.toLowerCase());
+        if (tags.length === 0) continue;
+        if (activeLower.some((t) => tags.includes(t))) {
+          matches = true;
+          break;
+        }
+      }
+
+      if (matches) set.add(dateKey);
+    }
+
+    return set;
+  }, [entriesTree, activeTags, normalizeTag, normalizeTags]);
 
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
+  const [draftTags, setDraftTags] = useState(() => []);
   const [entryTime, setEntryTime] = useState(() => dayjs());
   const [saving, setSaving] = useState(false);
 
@@ -99,12 +182,12 @@ export default function JournalPage({
 
   useEffect(() => {
     if (!user?.uid) {
-      setDaysWithEntries(new Set());
+      setEntriesTree(null);
       return undefined;
     }
 
-    const unsub = subscribeEntryDayKeys(user.uid, (dateKeys) => {
-      setDaysWithEntries(new Set(dateKeys));
+    const unsub = subscribeEntriesTree(user.uid, (tree) => {
+      setEntriesTree(tree);
     });
 
     return () => unsub();
@@ -128,13 +211,15 @@ export default function JournalPage({
     if (!selectedEntry) {
       setDraftTitle('');
       setDraftBody('');
+      setDraftTags([]);
       setEntryTime(dayjs());
       return;
     }
     setDraftTitle(selectedEntry.title || '');
     setDraftBody(selectedEntry.body || '');
+    setDraftTags(normalizeTags(selectedEntry.tags));
     setEntryTime(dayjs(selectedEntry.createdAt || Date.now()));
-  }, [selectedEntryId, selectedEntry]);
+  }, [selectedEntryId, selectedEntry, normalizeTags]);
 
   useEffect(() => {
     if (selectedEntryId && !selectedEntry) {
@@ -146,6 +231,7 @@ export default function JournalPage({
     selectedEntry && (
       draftTitle !== (selectedEntry.title || '') ||
       draftBody !== (selectedEntry.body || '') ||
+      normalizeTags(draftTags).join('\n').toLowerCase() !== normalizeTags(selectedEntry.tags).join('\n').toLowerCase() ||
       (entryTime && selectedEntry.createdAt !== entryTime.valueOf())
     ),
   );
@@ -179,6 +265,7 @@ export default function JournalPage({
       await saveEntry(user.uid, dateKey, selectedEntryId, {
         title: draftTitle,
         body: draftBody,
+        tags: normalizeTags(draftTags),
         createdAt: mergedTime,
       });
       // Return to "home" (entries list) after finishing
@@ -187,7 +274,7 @@ export default function JournalPage({
     } finally {
       setSaving(false);
     }
-  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, dateKey]);
+  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, draftTags, dateKey, normalizeTags]);
 
   const handleOpenDiscard = useCallback(() => {
     if (!selectedEntryId) return;
@@ -315,6 +402,25 @@ export default function JournalPage({
       onCreateEntry={handleCreateEntry}
       locale={i18n.language}
       daysWithEntries={daysWithEntries}
+      availableTags={availableTags}
+      activeTags={activeTags}
+      onToggleTag={(tag) => {
+        const cleaned = normalizeTag(tag);
+        if (!cleaned) return;
+        setActiveTags((prev) => {
+          const next = new Set(prev);
+          const key = cleaned.toLowerCase();
+          const prevKeys = new Set(Array.from(next).map((t) => normalizeTag(t).toLowerCase()));
+          if (prevKeys.has(key)) {
+            for (const t0 of Array.from(next)) {
+              if (normalizeTag(t0).toLowerCase() === key) next.delete(t0);
+            }
+          } else {
+            next.add(cleaned);
+          }
+          return next;
+        });
+      }}
     />
   );
 
@@ -323,22 +429,36 @@ export default function JournalPage({
   const monthYear = selectedDay.format('MMMM YYYY');
   const weekday = selectedDay.format('dddd');
 
+  const filteredEntries = useMemo(() => {
+    const active = Array.from(activeTags).map((t) => normalizeTag(t)).filter(Boolean);
+    if (active.length === 0) return entries;
+    const activeLower = active.map((t) => t.toLowerCase());
+    return entries.filter((entry) => {
+      const tags = normalizeTags(entry?.tags).map((t) => t.toLowerCase());
+      if (tags.length === 0) return false;
+      return activeLower.some((t) => tags.includes(t));
+    });
+  }, [entries, activeTags, normalizeTag, normalizeTags]);
+
   const entriesForList = useMemo(() => {
     const lang = i18n.language;
 
-    return entries.map((entry) => {
+    return filteredEntries.map((entry) => {
       const title = entry.title?.trim() ? entry.title : t('journal.untitled');
       const bodyPreviewHtml = entry.body ? htmlToPreviewHtml(entry.body) : '';
       const timeLabel = formatTime(entry.createdAt, lang);
+
+      const tags = normalizeTags(entry.tags);
 
       return {
         id: entry.id,
         title,
         bodyPreviewHtml,
         timeLabel,
+        tags,
       };
     });
-  }, [entries, i18n.language, t]);
+  }, [filteredEntries, i18n.language, t, normalizeTags]);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex' }}>
@@ -433,6 +553,9 @@ export default function JournalPage({
             onChangeTitle={setDraftTitle}
             draftBody={draftBody}
             onChangeBody={setDraftBody}
+            draftTags={draftTags}
+            onChangeTags={setDraftTags}
+            availableTags={availableTags}
             entryTime={entryTime}
             onChangeTime={setEntryTime}
             isEditing={isEditing}
