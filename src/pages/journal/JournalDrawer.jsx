@@ -108,9 +108,6 @@ export default function JournalDrawer({
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 2 }}>
-        <Button fullWidth variant="outlined" onClick={onToday}>
-          {t('journal.today')}
-        </Button>
         <Button
           fullWidth
           sx={{ mt: 1 }}
@@ -122,6 +119,25 @@ export default function JournalDrawer({
         </Button>
 
         <Divider sx={{ my: 2 }} />
+
+        <Button fullWidth variant="outlined" onClick={onToday}>
+          {t('journal.today')}
+        </Button>
+
+        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={locale}>
+          <DateCalendar
+            value={selectedDay}
+            onChange={(v) => v && onSelectDay(v)}
+            showDaysOutsideCurrentMonth
+            slots={{ day: EntryDotDay }}
+            slotProps={{
+              calendarHeader: { sx: { textTransform: 'capitalize' } },
+              day: { daysWithEntries },
+            }}
+          />
+        </LocalizationProvider>
+
+        <Divider sx={{ mb: 2, mt: -3 }} />
 
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
           {t('journal.tagsLabel')}
@@ -157,21 +173,6 @@ export default function JournalDrawer({
             </Typography>
           )}
         </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={locale}>
-          <DateCalendar
-            value={selectedDay}
-            onChange={(v) => v && onSelectDay(v)}
-            showDaysOutsideCurrentMonth
-            slots={{ day: EntryDotDay }}
-            slotProps={{
-              calendarHeader: { sx: { textTransform: 'capitalize' } },
-              day: { daysWithEntries },
-            }}
-          />
-        </LocalizationProvider>
       </Box>
     </Box>
   );

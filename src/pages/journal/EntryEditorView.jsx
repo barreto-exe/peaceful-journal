@@ -8,6 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useRef } from 'react';
+import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -213,7 +214,15 @@ export default function EntryEditorView({
             {t('journal.moodLabel')}
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 0.5 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              pb: 0.5,
+              flexWrap: { xs: 'wrap', sm: 'nowrap' },
+              overflowX: { xs: 'visible', sm: 'auto' },
+            }}
+          >
             {moodOptions.map((m) => {
               const selected = String(draftMood || '') === m.key;
               const disabled = !isEditing;
@@ -230,13 +239,16 @@ export default function EntryEditorView({
                     }
                   }}
                   sx={{
-                    minWidth: 96,
-                    px: 1.25,
-                    py: 1,
-                    borderRadius: 1.25,
-                    border: '2px solid',
-                    borderColor: selected ? 'secondary.main' : 'divider',
-                    bgcolor: selected ? 'background.paper' : 'action.hover',
+                    flex: { xs: '1 1 calc(20% - 8px)', sm: '0 0 auto' },
+                    minWidth: { xs: 64, sm: 88 },
+                    px: { xs: 0.75, sm: 1 },
+                    py: { xs: 0.75, sm: 0.9 },
+                    borderRadius: 999,
+                    border: 'none',
+                    bgcolor: selected
+                      ? (theme) => alpha(theme.palette.success.main, 0.12)
+                      : 'transparent',
+                    boxShadow: selected ? (theme) => theme.shadows[1] : 'none',
                     cursor: disabled ? 'default' : 'pointer',
                     userSelect: 'none',
                     display: 'flex',
@@ -245,12 +257,57 @@ export default function EntryEditorView({
                     justifyContent: 'center',
                     flexShrink: 0,
                     opacity: disabled ? 0.75 : 1,
+                    outline: 'none',
+                    transition:
+                      'background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+
+                    '& .moodLabel': {
+                      opacity: selected ? 1 : 0,
+                      maxHeight: selected ? 32 : 0,
+                      marginTop: selected ? 0.25 : 0,
+                      overflow: 'hidden',
+                      transition: 'opacity 160ms ease, max-height 160ms ease, margin-top 160ms ease',
+                    },
+
+                    '@media (hover: hover) and (pointer: fine)': {
+                      '&:hover': disabled
+                        ? undefined
+                        : {
+                            bgcolor: 'action.hover',
+                            transform: 'translateY(-1px)',
+                          },
+                      '&:hover .moodLabel': disabled
+                        ? undefined
+                        : {
+                            opacity: 1,
+                            maxHeight: 32,
+                            marginTop: 0.25,
+                          },
+                    },
+
+                    '&:focus-visible': disabled
+                      ? undefined
+                      : {
+                          bgcolor: 'action.hover',
+                          boxShadow: (theme) => theme.shadows[2],
+                        },
+                    '&:focus-visible .moodLabel': disabled
+                      ? undefined
+                      : {
+                          opacity: 1,
+                          maxHeight: 32,
+                          marginTop: 0.25,
+                        },
                   }}
                   aria-label={m.label}
                   aria-disabled={disabled ? 'true' : undefined}
                 >
                   <Box sx={{ fontSize: 28, lineHeight: 1, mb: 0.25 }}>{m.emoji}</Box>
-                  <Typography variant="caption" sx={{ fontWeight: 700, textAlign: 'center' }}>
+                  <Typography
+                    className="moodLabel"
+                    variant="caption"
+                    sx={{ fontWeight: 700, textAlign: 'center' }}
+                  >
                     {m.label}
                   </Typography>
                 </Box>
@@ -299,6 +356,7 @@ export default function EntryEditorView({
               ariaLabel={t('journal.bodyLabel')}
               readOnly={false}
               showToolbar
+              contentPadding={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}
             />
           ) : (
             <RichTextEditor
@@ -307,6 +365,7 @@ export default function EntryEditorView({
               ariaLabel={t('journal.bodyLabel')}
               readOnly
               showToolbar={false}
+              contentPadding={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}
             />
           )}
         </Box>

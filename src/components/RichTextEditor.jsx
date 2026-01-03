@@ -32,6 +32,7 @@ export default function RichTextEditor({
   ariaLabel,
   readOnly = false,
   showToolbar = true,
+  contentPadding,
 }) {
   const extensions = useMemo(
     () => [
@@ -230,6 +231,7 @@ export default function RichTextEditor({
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
+          ...(contentPadding || null),
           '& .tiptap': {
             outline: 'none',
             minHeight: '100%',
@@ -253,8 +255,7 @@ export default function RichTextEditor({
               left: 0,
               pointerEvents: 'none',
               color: 'text.secondary',
-              px: 0,
-              py: 0,
+              ...(contentPadding || null),
             }}
           >
             {placeholder}
