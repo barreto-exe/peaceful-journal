@@ -7,6 +7,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useRef } from 'react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -67,6 +68,8 @@ export default function EntryEditorView({
   onSave,
   onDelete,
 }) {
+  const bodyContainerRef = useRef(null);
+
   const moodOptions = [
     { key: 'terrible', emoji: '😢', label: t('journal.moodTerrible') },
     { key: 'gloomy', emoji: '🙁', label: t('journal.moodGloomy') },
@@ -74,6 +77,27 @@ export default function EntryEditorView({
     { key: 'good', emoji: '🙂', label: t('journal.moodGood') },
     { key: 'great', emoji: '😄', label: t('journal.moodGreat') },
   ];
+
+  const focusBodyEditor = () => {
+    const root = bodyContainerRef.current;
+    if (!root) return;
+    /** @type {HTMLElement | null} */
+    // TipTap renders a contenteditable element inside EditorContent
+    const editable = root.querySelector('[contenteditable="true"]');
+    editable?.focus?.();
+  };
+
+  const handleBodyContainerMouseDown = (e) => {
+    if (!isEditing) return;
+    const root = bodyContainerRef.current;
+    if (!root) return;
+    const editable = root.querySelector('[contenteditable="true"]');
+    if (!editable) return;
+    // If the user clicks inside the editor itself, let TipTap handle caret placement.
+    if (editable.contains(e.target)) return;
+    // Clicking the surrounding area should still focus the editor.
+    window.requestAnimationFrame(() => focusBodyEditor());
+  };
 
   return (
     <Box
@@ -89,18 +113,96 @@ export default function EntryEditorView({
       }}
     >
       <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ gap: 1, flexWrap: 'wrap' }}
+        >
           <Button startIcon={<ArrowBackIcon />} onClick={onBack} color="inherit">
             {t('common.back')}
           </Button>
-          <Box sx={{ minWidth: 160 }}>
+
+          <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 320 } }}>
+            {isEditing ? (
+              <Autocomplete
+                multiple
+                freeSolo
+                options={availableTags || []}
+                value={draftTags || []}
+                onChange={(_, value) => {
+                  const next = (value || [])
+                    .map((v) => String(v || '').trim())
+                    .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
+                    .filter(Boolean);
+                  // Deduplicate (case-insensitive)
+                  const seen = new Set();
+                  const unique = [];
+                  for (const tag of next) {
+                    const key = tag.toLowerCase();
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    unique.push(tag);
+                  }
+                  onChangeTags(unique);
+                }}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      label={option}
+                      {...getTagProps({ index })}
+                      key={`${option}-${index}`}
+                    />
+                  ))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size="small"
+                    label={t('journal.tagsLabel')}
+                    placeholder={t('journal.tagsPlaceholder')}
+                  />
+                )}
+              />
+            ) : (isDraft || draftTags?.length) ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                {isDraft ? (
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="filled"
+                    label={t('journal.draft')}
+                    sx={{ fontWeight: 700 }}
+                  />
+                ) : null}
+                {(draftTags || []).map((tag) => (
+                  <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
+                ))}
+              </Box>
+            ) : null}
+          </Box>
+
+          <Box sx={{ width: 'fit-content' }}>
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={locale}>
               <TimePicker
                 label={t('journal.timeLabel')}
                 value={entryTime}
                 onChange={(v) => v && onChangeTime(v)}
                 disabled={!isEditing}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    sx: {
+                      width: 'fit-content',
+                      minWidth: 0,
+                      '& .MuiInputBase-root': { width: 'fit-content' },
+                      '& .MuiInputBase-input': { width: '6.5ch' },
+                    },
+                  },
+                }}
               />
             </LocalizationProvider>
           </Box>
@@ -111,7 +213,7 @@ export default function EntryEditorView({
             {t('journal.moodLabel')}
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 0.5 }}>
+          <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 0.5 }}>
             {moodOptions.map((m) => {
               const selected = String(draftMood || '') === m.key;
               const disabled = !isEditing;
@@ -128,10 +230,10 @@ export default function EntryEditorView({
                     }
                   }}
                   sx={{
-                    minWidth: 120,
-                    px: 1.5,
-                    py: 1.25,
-                    borderRadius: 3,
+                    minWidth: 96,
+                    px: 1.25,
+                    py: 1,
+                    borderRadius: 1.25,
                     border: '2px solid',
                     borderColor: selected ? 'secondary.main' : 'divider',
                     bgcolor: selected ? 'background.paper' : 'action.hover',
@@ -147,7 +249,7 @@ export default function EntryEditorView({
                   aria-label={m.label}
                   aria-disabled={disabled ? 'true' : undefined}
                 >
-                  <Box sx={{ fontSize: 34, lineHeight: 1, mb: 0.5 }}>{m.emoji}</Box>
+                  <Box sx={{ fontSize: 28, lineHeight: 1, mb: 0.25 }}>{m.emoji}</Box>
                   <Typography variant="caption" sx={{ fontWeight: 700, textAlign: 'center' }}>
                     {m.label}
                   </Typography>
@@ -174,6 +276,11 @@ export default function EntryEditorView({
         />
 
         <Box
+          ref={bodyContainerRef}
+          onMouseDown={handleBodyContainerMouseDown}
+          onClick={() => {
+            if (isEditing) focusBodyEditor();
+          }}
           sx={{
             width: '100%',
             flex: 1,
@@ -181,6 +288,7 @@ export default function EntryEditorView({
             fontSize: '1rem',
             lineHeight: 1.6,
             overflowY: 'auto',
+            cursor: isEditing ? 'text' : 'default',
           }}
         >
           {isEditing ? (
@@ -202,69 +310,6 @@ export default function EntryEditorView({
             />
           )}
         </Box>
-
-        {isEditing ? (
-          <Box>
-            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }} color="text.secondary">
-              {t('journal.tagsLabel')}
-            </Typography>
-            <Autocomplete
-              multiple
-              freeSolo
-              options={availableTags || []}
-              value={draftTags || []}
-              onChange={(_, value) => {
-                const next = (value || [])
-                  .map((v) => String(v || '').trim())
-                  .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
-                  .filter(Boolean);
-                // Deduplicate (case-insensitive)
-                const seen = new Set();
-                const unique = [];
-                for (const tag of next) {
-                  const key = tag.toLowerCase();
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  unique.push(tag);
-                }
-                onChangeTags(unique);
-              }}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    label={option}
-                    {...getTagProps({ index })}
-                    key={`${option}-${index}`}
-                  />
-                ))
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  size="small"
-                  placeholder={t('journal.tagsPlaceholder')}
-                />
-              )}
-            />
-          </Box>
-        ) : (isDraft || draftTags?.length) ? (
-          <Box>
-            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }} color="text.secondary">
-              {t('journal.tagsLabel')}
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {isDraft ? (
-                <Chip size="small" color="primary" variant="filled" label={t('journal.draft')} sx={{ fontWeight: 700 }} />
-              ) : null}
-              {draftTags.map((tag) => (
-                <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
-              ))}
-            </Box>
-          </Box>
-        ) : null}
 
         <Stack
           direction="row"

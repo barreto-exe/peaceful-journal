@@ -64,6 +64,7 @@ export default function RichTextEditor({
     editorProps: {
       attributes: {
         'aria-label': ariaLabel || 'rich text editor',
+        class: 'tiptap',
       },
     },
     editable: !readOnly,
