@@ -392,7 +392,7 @@ export default function EntryEditorView({
             fontSize: '1.6rem',
             fontWeight: 700,
             padding: 0,
-            margin: '1rem 0 0 0',
+            margin: '1rem 0 0 -0.08rem',
             border: 'none',
             outline: 'none',
             background: 'transparent',
