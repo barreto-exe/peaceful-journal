@@ -12,7 +12,7 @@ import AddIcon from '@mui/icons-material/Add';
  * @typedef {{
  *  id: string,
  *  title: string,
- *  bodyPreview: string,
+ *  bodyPreviewHtml: string,
  *  timeLabel: string,
  * }} EntryListItem
  */
@@ -81,20 +81,24 @@ export default function EntryListView({
                     <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
                       {entry.title}
                     </Typography>
-                    {entry.bodyPreview ? (
+                    {entry.bodyPreviewHtml ? (
                       <Typography
                         variant="body1"
                         color="text.secondary"
+                        component="div"
                         sx={{
                           display: '-webkit-box',
                           WebkitLineClamp: 5,
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
-                          whiteSpace: 'pre-line',
+                          wordBreak: 'break-word',
+                          '& p': { margin: 0 },
+                          '& a': { color: 'primary.main', textDecoration: 'underline' },
+                          '& ul': { margin: 0, paddingLeft: 2.5 },
+                          '& li': { margin: 0 },
                         }}
-                      >
-                        {entry.bodyPreview}
-                      </Typography>
+                        dangerouslySetInnerHTML={{ __html: entry.bodyPreviewHtml }}
+                      />
                     ) : null}
                   </Box>
                 </ListItemButton>

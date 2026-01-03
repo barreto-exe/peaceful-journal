@@ -29,7 +29,7 @@ import {
   subscribeEntriesForDate,
 } from '../data/journalDb.js';
 import { getUserInitials } from '../utils/user.js';
-import { stripHtmlToText } from '../utils/text.js';
+import { htmlToPreviewHtml, stripHtmlToText } from '../utils/text.js';
 import { formatTime, mergeDayAndTime } from '../utils/datetime.js';
 
 // Slightly wider to fit the calendar without causing horizontal overflow
@@ -311,13 +311,13 @@ export default function JournalPage({
 
     return entries.map((entry) => {
       const title = entry.title?.trim() ? entry.title : t('journal.untitled');
-      const bodyPreview = entry.body ? stripHtmlToText(entry.body).trim() : '';
+      const bodyPreviewHtml = entry.body ? htmlToPreviewHtml(entry.body) : '';
       const timeLabel = formatTime(entry.createdAt, lang);
 
       return {
         id: entry.id,
         title,
-        bodyPreview,
+        bodyPreviewHtml,
         timeLabel,
       };
     });
