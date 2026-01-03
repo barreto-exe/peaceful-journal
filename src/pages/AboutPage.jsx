@@ -42,7 +42,7 @@ export default function AboutPage({ user, profile, onBack }) {
         <Stack spacing={3}>
           <Card>
             <CardHeader title={t('about.title')} subheader={t('about.tagline')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }}>
               <Typography variant="body1" color="text.primary">
                 {t('about.intro')}
               </Typography>
@@ -51,7 +51,7 @@ export default function AboutPage({ user, profile, onBack }) {
 
           <Card>
             <CardHeader title={t('about.sections.features.title')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }}>
               <Stack component="ul" spacing={1.25} sx={{ pl: 2, m: 0 }}>
                 <Typography component="li" variant="body1" color="text.primary">
                   {t('about.sections.features.entries')}
@@ -74,7 +74,7 @@ export default function AboutPage({ user, profile, onBack }) {
 
           <Card>
             <CardHeader title={t('about.sections.data.title')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }}>
               <Stack component="ul" spacing={1.25} sx={{ pl: 2, m: 0 }}>
                 <Typography component="li" variant="body1" color="text.primary">
                   {t('about.sections.data.storage')}

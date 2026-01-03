@@ -26,6 +26,7 @@ import Papa from 'papaparse';
 import { importEntries, upsertProfile } from '../data/journalDb.js';
 import TopNavBar from '../components/TopNavBar.jsx';
 import { getUserInitials } from '../utils/user.js';
+import { Margin } from '@mui/icons-material';
 
 function escapeHtml(text) {
   return String(text)
@@ -309,7 +310,7 @@ export default function ProfilePage({ user, profile, onBack }) {
         <Stack spacing={2}>
           <Card>
             <CardHeader title={t('profile.title')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }}>
               <Stack spacing={2}>
                 <TextField
                   label={t('profile.displayName')}
@@ -342,7 +343,7 @@ export default function ProfilePage({ user, profile, onBack }) {
 
           <Card>
             <CardHeader title={t('profile.import.title')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }} >
               <Stack spacing={2}>
                 <Typography variant="body2" color="text.secondary">
                   {t('profile.import.hint')}
@@ -387,7 +388,7 @@ export default function ProfilePage({ user, profile, onBack }) {
 
           <Card>
             <CardHeader title={t('profile.account')} />
-            <CardContent>
+            <CardContent sx={{ py: 0 }}>
               <Stack spacing={2}>
                 <Typography variant="body2" color="text.secondary">
                   {user?.email}
