@@ -2,18 +2,24 @@
 
 - **Stack & entry**: React 19 + Vite 7 + MUI 6. App mounts in [src/main.jsx](src/main.jsx) with `ThemeProvider` and `CssBaseline` using the custom theme from [src/theme.js](src/theme.js).
 - **Firebase bootstrap**: [src/firebase.js](src/firebase.js) initializes App/Auth/Realtime DB from `import.meta.env.VITE_*`. Ensure all keys exist or auth init will throw at startup.
-- **Auth flow**: [src/App.jsx](src/App.jsx) subscribes to `onAuthStateChanged`, renders nothing while `checkingAuth`, shows [LoginPage](src/pages/LoginPage.jsx) when signed out, and shows a minimal welcome screen with an AppBar + `signOut` button when signed in.
+- **Auth + navigation flow**: [src/App.jsx](src/App.jsx) subscribes to `onAuthStateChanged`, renders nothing while `checkingAuth`, shows [LoginPage](src/pages/LoginPage.jsx) when signed out, and switches between **Journal / Profile / About** views when signed in (no router). It also implements a lightweight browser-back guard using `history.pushState` plus a `registerBackHandler` callback for pages that need intercepts.
 - **Login/Signup page**: [src/pages/LoginPage.jsx](src/pages/LoginPage.jsx) toggles between login and signup, uses `signInWithEmailAndPassword` / `createUserWithEmailAndPassword`, surfaces Firebase error messages verbatim, and calls the optional `onSuccess` callback (currently a no-op in `App`). Password field includes show/hide toggle via `InputAdornment`.
 - **Styling conventions**: Centralized MUI theme (light) with primary `#2f6f8f`, secondary `#f9a826`, rounded corners (12px), and button `textTransform: none`. Prefer MUI layout primitives (`Box`, `Stack`, `Container`, `Card`). Typography uses Segoe UI/Helvetica stack.
-- **State patterns**: Hooks-only, no global state/store. Auth state lives in `App`; pass callbacks/props for navigation-like flows. Keep side effects inside `useEffect` with cleanups.
+- **State patterns**: Hooks-only, no global state/store. Auth + profile subscription live in `App` and are passed down as props. Keep side effects inside `useEffect` with cleanups. Prefer "derive via `useMemo`" for computed UI state.
 - **Environment setup**: Copy `.env.example` → `.env` (not tracked). Required vars: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`.
 - **Build/run**: `npm ci`, `npm run dev` for local, `npm run build` for production bundle, `npm run preview` to serve the built app, `npm run lint` for ESLint (React 9 config + hooks + react-refresh plugins).
 - **Hosting config**: [firebase.json](firebase.json) rewrites everything to `index.html` and serves `dist`; [vite.config.js](vite.config.js) is default react plugin config.
-- **Database rules**: See [database.rules.json](database.rules.json) for Realtime DB permissions; DB is initialized as `db` export though currently unused.
+- **Database + schema**: Realtime DB is used. See [src/data/journalDb.js](src/data/journalDb.js) and [database.rules.json](database.rules.json).
+	- Profiles: `profiles/{uid}` (e.g. `displayName`, `locale`).
+	- Entries: `entries/{uid}/{YYYY-MM-DD}/{entryId}` with `title/body/tags/mood/createdAt/updatedAt`.
+	- Drafting: shared `draft` plus per-session `autosaves/{sessionId}`; draft promotion/finalization is done through helper functions in [src/data/journalDb.js](src/data/journalDb.js).
 - **CI/CD**: GitHub Actions in [.github/workflows](.github/workflows) run `npm ci && npm run build` with injected `VITE_*` secrets; `firebase-hosting-merge.yml` deploys to the live channel on `main`, `firebase-hosting-pull-request.yml` creates preview channels for PRs (same-repo only). Service account secret: `FIREBASE_SERVICE_ACCOUNT_BARRETOEXE_PEACE_JOURNAL`.
 - **Deployment manual**: `firebase deploy --only hosting` after `npm run build` (requires local Firebase CLI auth and matching project).
-- **Error handling**: Errors from Firebase Auth are shown directly in the login form; adapt messaging upstream if user-facing polish is needed.
-- **Extending UI**: Add new screens under `src/pages/` and route via conditional logic in `App` (no router yet). Reuse the theme palette and spacing; prefer `Container` and `Card` for auth-like flows.
-- **Auth guard pattern**: If you add data features, assume components may render briefly with `user === null`; either early-return or gate on `hasSession` from `App`.
-- **Internationalization**: Copy uses Spanish labels; keep new UI strings consistent or extract constants if expanding locales.
-- **Known gaps**: No tests, routing, or DB usage yet; components directory is empty. Keep code lean and prefer simple prop drilling over new state managers unless complexity increases.
+- **Journal UI**: [src/pages/JournalPage.jsx](src/pages/JournalPage.jsx) provides the core journaling experience: calendar drawer (MUI X date pickers), tag filtering + global tag rename, entry list + editor view, two-step confirm dialogs for destructive actions.
+- **Rich text**: [src/components/RichTextEditor.jsx](src/components/RichTextEditor.jsx) is TipTap-based (StarterKit + Underline + Link) and is used by the entry editor.
+- **Dialogs**: [src/hooks/useTwoStepDialog.js](src/hooks/useTwoStepDialog.js) + [src/components/TwoStepConfirmDialog.jsx](src/components/TwoStepConfirmDialog.jsx) implement consistent 2-step confirmation UX.
+- **Error handling**: Firebase Auth errors are shown directly in the auth/profile forms; keep errors user-safe (avoid leaking secrets) and prefer surfacing `e?.message`.
+- **Extending UI**: Add new screens under `src/pages/` and route via `view` state in [src/App.jsx](src/App.jsx) (still no router). Reuse the theme palette and spacing.
+- **Auth guard pattern**: Components may render briefly with `user === null`; gate effects and DB calls on `user?.uid`.
+- **Internationalization**: i18next resources live in [src/i18n.js](src/i18n.js). UI language is stored in `localStorage` key `pj.lang` and can also be driven from `profile.locale`.
+- **Known gaps**: No tests and no router. Keep code lean and prefer simple prop drilling over new state managers unless complexity increases.

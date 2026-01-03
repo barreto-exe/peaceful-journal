@@ -22,8 +22,8 @@ Diario personal con React 19 + Vite 7 + MUI 6 y Firebase (Auth + Realtime Databa
 
 ## Funcionalidades
 - Autenticación email/contraseña con Firebase.
-- Página de diario: calendario por día, creación/edición/eliminación de entradas, editor enriquecido y confirmaciones de descarte/eliminación.
-- Perfil: actualizar nombre, idioma de la interfaz (es/en), email y contraseña con reautenticación.
+- Página de diario: calendario por día, creación/edición/eliminación de entradas, editor enriquecido, etiquetas (#tags), ánimo, borradores y autosave por sesión, filtro de calendario por etiquetas y renombrado global de etiquetas.
+- Perfil: actualizar nombre e idioma de la interfaz (es/en), importar entradas desde CSV, enviar verificación de correo y cambiar contraseña con reautenticación (requiere email verificado).
 - Navegación superior con avatar iniciales y menú Perfil, Acerca de y Logout.
 - Página Acerca de con resumen de uso, privacidad y requisitos de entorno.
 - Internacionalización con i18next; preferencia de idioma persistida en `localStorage`.

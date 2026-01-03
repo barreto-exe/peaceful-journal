@@ -1,5 +1,8 @@
 import { createTheme } from '@mui/material/styles';
 
+const appFontFamily =
+  '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
 const theme = createTheme({
   palette: {
     mode: 'light',
@@ -18,12 +21,19 @@ const theme = createTheme({
     borderRadius: 12,
   },
   typography: {
-    fontFamily: '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
+    fontFamily: appFontFamily,
     h4: {
       fontWeight: 700,
     },
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          fontFamily: appFontFamily,
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {

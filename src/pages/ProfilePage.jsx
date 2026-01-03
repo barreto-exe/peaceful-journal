@@ -26,7 +26,6 @@ import Papa from 'papaparse';
 import { importEntries, upsertProfile } from '../data/journalDb.js';
 import TopNavBar from '../components/TopNavBar.jsx';
 import { getUserInitials } from '../utils/user.js';
-import { Margin } from '@mui/icons-material';
 
 function escapeHtml(text) {
   return String(text)
