@@ -18,6 +18,7 @@ import AddIcon from '@mui/icons-material/Add';
  *  tags?: string[],
  *  moodLabel?: string,
  *  moodEmoji?: string,
+ *  isDraft?: boolean,
  * }} EntryListItem
  */
 
@@ -108,7 +109,7 @@ export default function EntryListView({
                       />
                     ) : null}
 
-                    {entry.moodLabel || entry.tags?.length ? (
+                    {entry.moodLabel || entry.isDraft || entry.tags?.length ? (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, my: 1 }}>
                         {entry.moodLabel ? (
                           <Chip
@@ -116,6 +117,16 @@ export default function EntryListView({
                             color="secondary"
                             variant="filled"
                             label={`${entry.moodEmoji ? entry.moodEmoji + ' ' : ''}${entry.moodLabel}`}
+                            sx={{ fontWeight: 700 }}
+                          />
+                        ) : null}
+
+                        {entry.isDraft ? (
+                          <Chip
+                            size="small"
+                            color="primary"
+                            variant="filled"
+                            label={t('journal.draft')}
                             sx={{ fontWeight: 700 }}
                           />
                         ) : null}

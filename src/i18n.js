@@ -59,6 +59,7 @@ const resources = {
         moodFine: 'Normal',
         moodGood: 'Bien',
         moodGreat: 'Genial',
+        draft: 'Borrador',
       },
       profile: {
         title: 'Perfil',
@@ -167,6 +168,7 @@ const resources = {
         moodFine: 'Just fine',
         moodGood: 'Pretty good',
         moodGreat: 'Top of the world',
+        draft: 'Draft',
       },
       profile: {
         title: 'Profile',

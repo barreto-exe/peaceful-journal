@@ -30,6 +30,7 @@ import RichTextEditor from '../../components/RichTextEditor.jsx';
  *  draftTags: string[],
  *  onChangeTags: (tags: string[]) => void,
  *  availableTags: string[],
+ *  isDraft?: boolean,
  *  draftMood: string,
  *  onChangeMood: (mood: string) => void,
  *  entryTime: Dayjs,
@@ -53,6 +54,7 @@ export default function EntryEditorView({
   draftTags,
   onChangeTags,
   availableTags,
+  isDraft,
   draftMood,
   onChangeMood,
   entryTime,
@@ -104,68 +106,8 @@ export default function EntryEditorView({
           </Box>
         </Stack>
 
-        {isEditing ? (
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
-              {t('journal.tagsLabel')}
-            </Typography>
-            <Autocomplete
-              multiple
-              freeSolo
-              options={availableTags || []}
-              value={draftTags || []}
-              onChange={(_, value) => {
-                const next = (value || [])
-                  .map((v) => String(v || '').trim())
-                  .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
-                  .filter(Boolean);
-                // Deduplicate (case-insensitive)
-                const seen = new Set();
-                const unique = [];
-                for (const tag of next) {
-                  const key = tag.toLowerCase();
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  unique.push(tag);
-                }
-                onChangeTags(unique);
-              }}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    label={option}
-                    {...getTagProps({ index })}
-                    key={`${option}-${index}`}
-                  />
-                ))
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  size="small"
-                  placeholder={t('journal.tagsPlaceholder')}
-                />
-              )}
-            />
-          </Box>
-        ) : draftTags?.length ? (
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
-              {t('journal.tagsLabel')}
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {draftTags.map((tag) => (
-                <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
-              ))}
-            </Box>
-          </Box>
-        ) : null}
-
-        <Box sx={{ mt: isEditing || draftTags?.length ? 0 : 0 }}>
-          <Typography variant="subtitle2" sx={{ mt: isEditing ? 2 : 0, mb: 1 }} color="text.secondary">
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
             {t('journal.moodLabel')}
           </Typography>
 
@@ -260,6 +202,69 @@ export default function EntryEditorView({
             />
           )}
         </Box>
+
+        {isEditing ? (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }} color="text.secondary">
+              {t('journal.tagsLabel')}
+            </Typography>
+            <Autocomplete
+              multiple
+              freeSolo
+              options={availableTags || []}
+              value={draftTags || []}
+              onChange={(_, value) => {
+                const next = (value || [])
+                  .map((v) => String(v || '').trim())
+                  .map((v) => (v.startsWith('#') ? v.slice(1).trim() : v))
+                  .filter(Boolean);
+                // Deduplicate (case-insensitive)
+                const seen = new Set();
+                const unique = [];
+                for (const tag of next) {
+                  const key = tag.toLowerCase();
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  unique.push(tag);
+                }
+                onChangeTags(unique);
+              }}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    label={option}
+                    {...getTagProps({ index })}
+                    key={`${option}-${index}`}
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  placeholder={t('journal.tagsPlaceholder')}
+                />
+              )}
+            />
+          </Box>
+        ) : (isDraft || draftTags?.length) ? (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }} color="text.secondary">
+              {t('journal.tagsLabel')}
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {isDraft ? (
+                <Chip size="small" color="primary" variant="filled" label={t('journal.draft')} sx={{ fontWeight: 700 }} />
+              ) : null}
+              {draftTags.map((tag) => (
+                <Chip key={tag} size="small" variant="outlined" color="secondary" label={tag} />
+              ))}
+            </Box>
+          </Box>
+        ) : null}
 
         <Stack
           direction="row"

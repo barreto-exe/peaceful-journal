@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Drawer,
@@ -23,9 +23,12 @@ import EntryListView from './journal/EntryListView.jsx';
 import JournalDrawer from './journal/JournalDrawer.jsx';
 import {
   createEntry,
+  deleteEntryAutosave,
   deleteEntry,
+  finalizeEntryDraft,
   formatDateKey,
-  saveEntry,
+  saveEntryAutosave,
+  promoteToDraft,
   subscribeEntriesForDate,
   subscribeEntriesTree,
 } from '../data/journalDb.js';
@@ -54,6 +57,22 @@ export default function JournalPage({
 
   const [entries, setEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
+  const [editingDateKey, setEditingDateKey] = useState('');
+
+  const editBaselineRef = useRef(null);
+
+  const sessionId = useMemo(() => {
+    const key = 'pj.sessionId';
+    try {
+      const existing = window.sessionStorage.getItem(key);
+      if (existing) return existing;
+      const created = (globalThis.crypto?.randomUUID?.() || `s_${Math.random().toString(16).slice(2)}_${Date.now()}`);
+      window.sessionStorage.setItem(key, created);
+      return created;
+    } catch {
+      return `s_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+    }
+  }, []);
 
   const [entriesTree, setEntriesTree] = useState(null);
   const [activeTags, setActiveTags] = useState(() => new Set());
@@ -90,7 +109,7 @@ export default function JournalPage({
 
       for (const entryId of Object.keys(dayBucket)) {
         const entry = dayBucket[entryId];
-        const tags = normalizeTags(entry?.tags);
+        const tags = normalizeTags(entry?.draft?.tags ?? entry?.tags);
         for (const tag of tags) {
           const k = tag.toLowerCase();
           if (!map.has(k)) map.set(k, tag);
@@ -125,7 +144,7 @@ export default function JournalPage({
           break;
         }
 
-        const tags = normalizeTags(entry.tags).map((t) => t.toLowerCase());
+        const tags = normalizeTags(entry?.draft?.tags ?? entry.tags).map((t) => t.toLowerCase());
         if (tags.length === 0) continue;
         if (activeLower.some((t) => tags.includes(t))) {
           matches = true;
@@ -145,6 +164,11 @@ export default function JournalPage({
   const [draftMood, setDraftMood] = useState('');
   const [entryTime, setEntryTime] = useState(() => dayjs());
   const [saving, setSaving] = useState(false);
+
+  const handleChangeDraftBody = useCallback((html) => {
+    const text = stripHtmlToText(String(html || '')).trim();
+    setDraftBody(text ? String(html) : '');
+  }, []);
 
   const {
     open: discardOpen,
@@ -208,21 +232,41 @@ export default function JournalPage({
     return entriesById[selectedEntryId] || null;
   }, [entriesById, selectedEntryId]);
 
+  const sessionAutosave = useMemo(() => {
+    if (!selectedEntry) return null;
+    const map = selectedEntry.autosaves;
+    if (!map || typeof map !== 'object') return null;
+    return map[sessionId] || null;
+  }, [selectedEntry, sessionId]);
+
+  const selectedEffectiveEntry = useMemo(() => {
+    if (!selectedEntry) return null;
+    // Read mode shows shared draft if any; edit mode prefers session autosave.
+    if (isEditing && sessionAutosave) return sessionAutosave;
+    return selectedEntry.draft || selectedEntry;
+  }, [selectedEntry, isEditing, sessionAutosave]);
+
   useEffect(() => {
-    if (!selectedEntry) {
+    if (!selectedEntryId) {
       setDraftTitle('');
       setDraftBody('');
       setDraftTags([]);
       setDraftMood('');
       setEntryTime(dayjs());
+      editBaselineRef.current = null;
       return;
     }
-    setDraftTitle(selectedEntry.title || '');
-    setDraftBody(selectedEntry.body || '');
-    setDraftTags(normalizeTags(selectedEntry.tags));
-    setDraftMood(String(selectedEntry.mood || ''));
-    setEntryTime(dayjs(selectedEntry.createdAt || Date.now()));
-  }, [selectedEntryId, selectedEntry, normalizeTags]);
+
+    // Only hydrate from Firebase when not actively editing.
+    if (!selectedEffectiveEntry) return;
+    if (isEditing) return;
+
+    setDraftTitle(selectedEffectiveEntry.title || '');
+    setDraftBody(selectedEffectiveEntry.body || '');
+    setDraftTags(normalizeTags(selectedEffectiveEntry.tags));
+    setDraftMood(String(selectedEffectiveEntry.mood || ''));
+    setEntryTime(dayjs((selectedEffectiveEntry.createdAt || Date.now())));
+  }, [selectedEntryId, selectedEffectiveEntry, normalizeTags, isEditing]);
 
   useEffect(() => {
     if (selectedEntryId && !selectedEntry) {
@@ -230,30 +274,134 @@ export default function JournalPage({
     }
   }, [selectedEntryId, selectedEntry]);
 
-  const isDirty = Boolean(
-    selectedEntry && (
-      draftTitle !== (selectedEntry.title || '') ||
-      draftBody !== (selectedEntry.body || '') ||
-      normalizeTags(draftTags).join('\n').toLowerCase() !== normalizeTags(selectedEntry.tags).join('\n').toLowerCase() ||
-      String(draftMood || '') !== String(selectedEntry.mood || '') ||
-      (entryTime && selectedEntry.createdAt !== entryTime.valueOf())
-    ),
-  );
+  const isDraft = Boolean(selectedEntry?.draft);
+
+  const isDirty = useMemo(() => {
+    if (!isEditing) return false;
+    const baseline = editBaselineRef.current;
+    if (!baseline) return false;
+
+    const baselineTags = normalizeTags(baseline.tags).join('\n').toLowerCase();
+    const currentTags = normalizeTags(draftTags).join('\n').toLowerCase();
+
+    return (
+      draftTitle !== (baseline.title || '') ||
+      draftBody !== (baseline.body || '') ||
+      currentTags !== baselineTags ||
+      String(draftMood || '') !== String(baseline.mood || '') ||
+      (entryTime && baseline.createdAt !== entryTime.valueOf())
+    );
+  }, [isEditing, draftTitle, draftBody, draftTags, draftMood, entryTime, normalizeTags]);
+
+  const flushAutosaveNow = useCallback(async () => {
+    if (!user?.uid || !selectedEntryId || !editingDateKey || !isEditing) return;
+    if (!isDirty) return;
+
+    const mergedTime = mergeDayAndTime(selectedDay, entryTime);
+    await saveEntryAutosave(user.uid, editingDateKey, selectedEntryId, sessionId, {
+      title: draftTitle,
+      body: draftBody,
+      tags: normalizeTags(draftTags),
+      mood: draftMood ? String(draftMood) : '',
+      createdAt: mergedTime,
+    });
+  }, [user?.uid, selectedEntryId, editingDateKey, isEditing, isDirty, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, normalizeTags, sessionId]);
+
+  const promoteDraftAndClose = useCallback(async () => {
+    if (!user?.uid || !selectedEntryId || !editingDateKey) {
+      setSelectedEntryId(null);
+      setEditingDateKey('');
+      setIsEditing(false);
+      return;
+    }
+
+    if (isEditing && (isDirty || Boolean(sessionAutosave))) {
+      if (isDirty) {
+        await flushAutosaveNow();
+      }
+      const mergedTime = mergeDayAndTime(selectedDay, entryTime);
+      await promoteToDraft(user.uid, editingDateKey, selectedEntryId, sessionId, {
+        title: draftTitle,
+        body: draftBody,
+        tags: normalizeTags(draftTags),
+        mood: draftMood ? String(draftMood) : '',
+        createdAt: mergedTime,
+      });
+    }
+
+    // Leaving editor ends this session's autosave.
+    if (isEditing) {
+      await deleteEntryAutosave(user.uid, editingDateKey, selectedEntryId, sessionId);
+    }
+
+    setSelectedEntryId(null);
+    setEditingDateKey('');
+    setIsEditing(false);
+    editBaselineRef.current = null;
+  }, [user?.uid, selectedEntryId, editingDateKey, isEditing, isDirty, sessionAutosave, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, normalizeTags, flushAutosaveNow, sessionId]);
+
+  useEffect(() => {
+    if (!user?.uid || !selectedEntryId || !editingDateKey || !isEditing) return undefined;
+    if (!isDirty) return undefined;
+
+    const mergedTime = mergeDayAndTime(selectedDay, entryTime);
+    const handle = globalThis.setTimeout(() => {
+      void saveEntryAutosave(user.uid, editingDateKey, selectedEntryId, sessionId, {
+        title: draftTitle,
+        body: draftBody,
+        tags: normalizeTags(draftTags),
+        mood: draftMood ? String(draftMood) : '',
+        createdAt: mergedTime,
+      });
+    }, 450);
+
+    return () => globalThis.clearTimeout(handle);
+  }, [user?.uid, selectedEntryId, editingDateKey, isEditing, isDirty, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, normalizeTags, sessionId]);
+
+  const handleStartEditing = useCallback(() => {
+    if (!selectedEntry || isEditing) return;
+
+    const source = sessionAutosave || selectedEntry.draft || selectedEntry;
+    setDraftTitle(source.title || '');
+    setDraftBody(source.body || '');
+    setDraftTags(normalizeTags(source.tags));
+    setDraftMood(String(source.mood || ''));
+    setEntryTime(dayjs((source.createdAt || Date.now())));
+
+    editBaselineRef.current = {
+      title: source.title || '',
+      body: source.body || '',
+      tags: normalizeTags(source.tags),
+      mood: String(source.mood || ''),
+      createdAt: (source.createdAt || Date.now()),
+    };
+
+    setIsEditing(true);
+  }, [selectedEntry, isEditing, sessionAutosave, normalizeTags]);
 
   const selectedEntryBodyText = useMemo(
     () => stripHtmlToText(selectedEntry?.body || '').trim(),
     [selectedEntry?.body],
   );
 
-  const draftBodyText = useMemo(
-    () => stripHtmlToText(draftBody).trim(),
-    [draftBody],
-  );
-
   const handleCreateEntry = useCallback(async () => {
     if (!user?.uid) return;
     const created = await createEntry(user.uid, dateKey);
+    setEditingDateKey(dateKey);
     setSelectedEntryId(created.id);
+    setDraftTitle('');
+    setDraftBody('');
+    setDraftTags([]);
+    setDraftMood('');
+    const createdAt = created.createdAt || Date.now();
+    setEntryTime(dayjs(createdAt));
+    editBaselineRef.current = {
+      title: '',
+      body: '',
+      tags: [],
+      mood: '',
+      createdAt,
+    };
     setIsEditing(true);
     if (!isDesktop) {
       setMobileOpen(false);
@@ -266,25 +414,35 @@ export default function JournalPage({
     try {
       const mergedTime = mergeDayAndTime(selectedDay, entryTime);
 
-      await saveEntry(user.uid, dateKey, selectedEntryId, {
+      await finalizeEntryDraft(user.uid, editingDateKey || dateKey, selectedEntryId, {
         title: draftTitle,
         body: draftBody,
         tags: normalizeTags(draftTags),
         mood: draftMood ? String(draftMood) : '',
         createdAt: mergedTime,
       });
+
+      await deleteEntryAutosave(user.uid, editingDateKey || dateKey, selectedEntryId, sessionId);
       // Return to "home" (entries list) after finishing
       setSelectedEntryId(null);
+      setEditingDateKey('');
       setIsEditing(false);
     } finally {
       setSaving(false);
     }
-  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, dateKey, normalizeTags]);
+  }, [user?.uid, selectedEntryId, selectedDay, entryTime, draftTitle, draftBody, draftTags, draftMood, dateKey, editingDateKey, normalizeTags, sessionId]);
 
   const handleOpenDiscard = useCallback(() => {
     if (!selectedEntryId) return;
-    openDiscardDialog();
-  }, [selectedEntryId, openDiscardDialog]);
+    // Only the explicit Back button should prompt.
+    if (isEditing && (isDirty || Boolean(sessionAutosave))) {
+      openDiscardDialog();
+      return;
+    }
+    setSelectedEntryId(null);
+    setEditingDateKey('');
+    setIsEditing(false);
+  }, [selectedEntryId, isEditing, isDirty, sessionAutosave, openDiscardDialog]);
 
   const isUnsavedNewEntry = Boolean(
     selectedEntry &&
@@ -296,54 +454,45 @@ export default function JournalPage({
   );
 
   const handleBack = useCallback(async () => {
-    if (!selectedEntry) {
+    if (!selectedEntryId) {
       setSelectedEntryId(null);
+      setEditingDateKey('');
       setIsEditing(false);
       return;
     }
 
-    if (isEditing && !isDirty && !isUnsavedNewEntry) {
-      setIsEditing(false);
-      return;
-    }
-
-    const isEmptyDraft = !draftTitle.trim() && !draftBodyText;
-    if (isEmptyDraft && user?.uid && selectedEntryId) {
-      try {
-        await deleteEntry(user.uid, dateKey, selectedEntryId);
-      } finally {
-        setSelectedEntryId(null);
-        setIsEditing(false);
-      }
-      return;
-    }
-
-    if (isDirty) {
+    // Only "Volver" can prompt discard.
+    if (isEditing && (isDirty || Boolean(sessionAutosave))) {
       handleOpenDiscard();
       return;
     }
 
     setSelectedEntryId(null);
-  }, [selectedEntry, isEditing, isDirty, isUnsavedNewEntry, user?.uid, selectedEntryId, draftTitle, draftBodyText, dateKey, handleOpenDiscard]);
+    setEditingDateKey('');
+    setIsEditing(false);
+  }, [selectedEntryId, isEditing, isDirty, sessionAutosave, handleOpenDiscard]);
 
   const handleConfirmDiscard = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
 
     try {
-      if (isUnsavedNewEntry) {
-        await deleteEntry(user.uid, dateKey, selectedEntryId);
-        setSelectedEntryId(null);
-        setIsEditing(false);
+      // If this is a new empty entry, treat discard as cancel creation.
+      const savedIsEmpty = !String(selectedEntry?.title || '').trim() && !stripHtmlToText(selectedEntry?.body || '').trim() && !(selectedEntry?.tags?.length) && !String(selectedEntry?.mood || '');
+      const localIsEmpty = !draftTitle.trim() && !stripHtmlToText(draftBody || '').trim() && normalizeTags(draftTags).length === 0 && !String(draftMood || '');
+      if (savedIsEmpty && localIsEmpty) {
+        await deleteEntry(user.uid, editingDateKey || dateKey, selectedEntryId);
       } else {
-        setDraftTitle(selectedEntry?.title || '');
-        setDraftBody(selectedEntry?.body || '');
-        setEntryTime(dayjs(selectedEntry?.createdAt || Date.now()));
-        setIsEditing(false);
+        // Discard only this tab's autosave; do not touch shared draft.
+        await deleteEntryAutosave(user.uid, editingDateKey || dateKey, selectedEntryId, sessionId);
       }
+
+      setSelectedEntryId(null);
+      setEditingDateKey('');
+      setIsEditing(false);
     } finally {
       closeDiscardDialog();
     }
-  }, [user?.uid, selectedEntryId, isUnsavedNewEntry, selectedEntry, dateKey, closeDiscardDialog]);
+  }, [user?.uid, selectedEntryId, selectedEntry, dateKey, editingDateKey, closeDiscardDialog, draftTitle, draftBody, draftTags, draftMood, normalizeTags, sessionId]);
 
   const handleOpenDelete = useCallback(() => {
     if (!selectedEntryId) return;
@@ -353,13 +502,14 @@ export default function JournalPage({
   const handleConfirmDelete = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
     try {
-      await deleteEntry(user.uid, dateKey, selectedEntryId);
+      await deleteEntry(user.uid, editingDateKey || dateKey, selectedEntryId);
       setSelectedEntryId(null);
+      setEditingDateKey('');
       setIsEditing(false);
     } finally {
       closeDeleteDialog();
     }
-  }, [user?.uid, selectedEntryId, dateKey, closeDeleteDialog]);
+  }, [user?.uid, selectedEntryId, dateKey, editingDateKey, closeDeleteDialog]);
 
   const handleHardwareBack = useCallback(async () => {
     if (mobileOpen) {
@@ -378,12 +528,13 @@ export default function JournalPage({
     }
 
     if (selectedEntryId) {
-      await handleBack();
+      // Never prompt on hardware back: leaving marks draft if needed.
+      await promoteDraftAndClose();
       return true;
     }
 
     return false;
-  }, [mobileOpen, discardOpen, closeDiscardDialog, deleteOpen, closeDeleteDialog, selectedEntryId, handleBack]);
+  }, [mobileOpen, discardOpen, closeDiscardDialog, deleteOpen, closeDeleteDialog, selectedEntryId, promoteDraftAndClose]);
 
   useEffect(() => {
     if (selectedEntry && !isUnsavedNewEntry) {
@@ -402,8 +553,12 @@ export default function JournalPage({
     <JournalDrawer
       t={t}
       selectedDay={selectedDay}
-      onSelectDay={setSelectedDay}
-      onToday={() => setSelectedDay(dayjs())}
+      onSelectDay={(day) => {
+        void promoteDraftAndClose().finally(() => setSelectedDay(day));
+      }}
+      onToday={() => {
+        void promoteDraftAndClose().finally(() => setSelectedDay(dayjs()));
+      }}
       onCreateEntry={handleCreateEntry}
       locale={i18n.language}
       daysWithEntries={daysWithEntries}
@@ -439,7 +594,7 @@ export default function JournalPage({
     if (active.length === 0) return entries;
     const activeLower = active.map((t) => t.toLowerCase());
     return entries.filter((entry) => {
-      const tags = normalizeTags(entry?.tags).map((t) => t.toLowerCase());
+      const tags = normalizeTags(entry?.draft?.tags ?? entry?.tags).map((t) => t.toLowerCase());
       if (tags.length === 0) return false;
       return activeLower.some((t) => tags.includes(t));
     });
@@ -468,12 +623,13 @@ export default function JournalPage({
     };
 
     return filteredEntries.map((entry) => {
-      const title = entry.title?.trim() ? entry.title : t('journal.untitled');
-      const bodyPreviewHtml = entry.body ? htmlToPreviewHtml(entry.body) : '';
-      const timeLabel = formatTime(entry.createdAt, lang);
+      const effective = entry.draft || entry;
+      const title = effective.title?.trim() ? effective.title : t('journal.untitled');
+      const bodyPreviewHtml = effective.body ? htmlToPreviewHtml(effective.body) : '';
+      const timeLabel = formatTime(effective.createdAt, lang);
 
-      const tags = normalizeTags(entry.tags);
-      const mood = moodMeta(entry.mood);
+      const tags = normalizeTags(effective.tags);
+      const mood = moodMeta(effective.mood);
 
       return {
         id: entry.id,
@@ -483,6 +639,7 @@ export default function JournalPage({
         tags,
         moodLabel: mood?.label || '',
         moodEmoji: mood?.emoji || '',
+        isDraft: Boolean(entry.draft),
       };
     });
   }, [filteredEntries, i18n.language, t, normalizeTags]);
@@ -491,7 +648,9 @@ export default function JournalPage({
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex' }}>
       <TopNavBar
         title={t('appName')}
-        onTitleClick={handleBack}
+        onTitleClick={() => {
+          void promoteDraftAndClose();
+        }}
         left={!isDesktop ? (
           <IconButton color="inherit" edge="start" onClick={() => setMobileOpen((open) => !open)}>
             <MenuIcon />
@@ -504,19 +663,25 @@ export default function JournalPage({
             key: 'profile',
             label: t('nav.profile'),
             icon: <PersonIcon fontSize="small" style={{ marginRight: 8 }} />,
-            onClick: () => onOpenProfile?.(),
+            onClick: () => {
+              void promoteDraftAndClose().finally(() => onOpenProfile?.());
+            },
           },
           {
             key: 'about',
             label: t('nav.about'),
             icon: <InfoOutlinedIcon fontSize="small" style={{ marginRight: 8 }} />,
-            onClick: () => onOpenAbout?.(),
+            onClick: () => {
+              void promoteDraftAndClose().finally(() => onOpenAbout?.());
+            },
           },
           {
             key: 'logout',
             label: t('nav.logout'),
             icon: <LogoutIcon fontSize="small" style={{ marginRight: 8 }} />,
-            onClick: () => onLogout?.(),
+            onClick: () => {
+              void promoteDraftAndClose().finally(() => onLogout?.());
+            },
           },
         ]}
       />
@@ -570,7 +735,11 @@ export default function JournalPage({
             weekday={weekday}
             entries={entriesForList}
             onCreateEntry={handleCreateEntry}
-            onSelectEntry={setSelectedEntryId}
+            onSelectEntry={(id) => {
+              setEditingDateKey(dateKey);
+              setSelectedEntryId(id);
+              setIsEditing(false);
+            }}
           />
         ) : (
           <EntryEditorView
@@ -579,16 +748,17 @@ export default function JournalPage({
             draftTitle={draftTitle}
             onChangeTitle={setDraftTitle}
             draftBody={draftBody}
-            onChangeBody={setDraftBody}
+            onChangeBody={handleChangeDraftBody}
             draftTags={draftTags}
             onChangeTags={setDraftTags}
             availableTags={availableTags}
+            isDraft={isDraft}
             draftMood={draftMood}
             onChangeMood={setDraftMood}
             entryTime={entryTime}
             onChangeTime={setEntryTime}
             isEditing={isEditing}
-            onStartEditing={() => setIsEditing(true)}
+            onStartEditing={handleStartEditing}
             isDirty={isDirty}
             saving={saving}
             onBack={handleBack}
