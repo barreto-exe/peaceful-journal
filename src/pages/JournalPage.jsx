@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Button,
   Box,
   Drawer,
   IconButton,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  TextField,
   Toolbar,
   useMediaQuery,
 } from '@mui/material';
@@ -27,6 +34,7 @@ import {
   deleteEntry,
   finalizeEntryDraft,
   formatDateKey,
+  renameEntryTag,
   saveEntryAutosave,
   promoteToDraft,
   subscribeEntriesForDate,
@@ -77,11 +85,42 @@ export default function JournalPage({
   const [entriesTree, setEntriesTree] = useState(null);
   const [activeTags, setActiveTags] = useState(() => new Set());
 
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameFromTag, setRenameFromTag] = useState('');
+  const [renameToTag, setRenameToTag] = useState('');
+  const [renaming, setRenaming] = useState(false);
+
   const normalizeTag = useCallback((tag) => {
     const v = String(tag || '').trim();
     if (!v) return '';
     return v.startsWith('#') ? v.slice(1).trim() : v;
   }, []);
+
+  const renameTagInList = useCallback((tags, fromLower, toTag) => {
+    if (!Array.isArray(tags) || tags.length === 0) return tags || [];
+    const replaced = [];
+    let changed = false;
+    for (const raw of tags) {
+      const cleaned = normalizeTag(raw);
+      if (!cleaned) continue;
+      if (cleaned.toLowerCase() === fromLower) {
+        replaced.push(toTag);
+        changed = true;
+      } else {
+        replaced.push(cleaned);
+      }
+    }
+    if (!changed) return replaced;
+    const seen = new Set();
+    const deduped = [];
+    for (const t0 of replaced) {
+      const k = String(t0).toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      deduped.push(t0);
+    }
+    return deduped;
+  }, [normalizeTag]);
 
   const normalizeTags = useCallback((tags) => {
     if (!Array.isArray(tags)) return [];
@@ -551,11 +590,17 @@ export default function JournalPage({
     return false;
   }, [mobileOpen, discardOpen, closeDiscardDialog, deleteOpen, closeDeleteDialog, selectedEntryId, promoteDraftAndClose]);
 
+  // If the user navigates to a different entry, start in read mode.
+  // IMPORTANT: do not reset `isEditing` on every Firebase update of the selected entry,
+  // otherwise autosaves/draft updates can kick the user out of edit mode.
+  const lastSelectedEntryIdRef = useRef(null);
   useEffect(() => {
-    if (selectedEntry && !isUnsavedNewEntry) {
+    if (lastSelectedEntryIdRef.current === selectedEntryId) return;
+    lastSelectedEntryIdRef.current = selectedEntryId;
+    if (selectedEntryId && !isUnsavedNewEntry) {
       setIsEditing(false);
     }
-  }, [selectedEntryId, selectedEntry, isUnsavedNewEntry]);
+  }, [selectedEntryId, isUnsavedNewEntry]);
 
   useEffect(() => {
     if (!registerBackHandler) return undefined;
@@ -595,6 +640,13 @@ export default function JournalPage({
           }
           return next;
         });
+      }}
+      onRenameTag={(tag) => {
+        const cleaned = normalizeTag(tag);
+        if (!cleaned) return;
+        setRenameFromTag(cleaned);
+        setRenameToTag(cleaned);
+        setRenameOpen(true);
       }}
     />
   );
@@ -812,6 +864,87 @@ export default function JournalPage({
         onContinue={continueDeleteToStep2}
         onConfirm={handleConfirmDelete}
       />
+
+      <Dialog
+        open={renameOpen}
+        onClose={() => {
+          if (renaming) return;
+          setRenameOpen(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('journal.renameTagTitle')}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {t('journal.renameTagBody', { tag: renameFromTag })}
+          </DialogContentText>
+          <TextField
+            label={t('journal.renameTagNewLabel')}
+            value={renameToTag}
+            onChange={(e) => setRenameToTag(e.target.value)}
+            fullWidth
+            autoFocus
+            disabled={renaming}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRenameOpen(false)}
+            color="inherit"
+            disabled={renaming}
+          >
+            {t('journal.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={(() => {
+              if (renaming) return true;
+              const fromClean = normalizeTag(renameFromTag);
+              const toClean = normalizeTag(renameToTag);
+              if (!fromClean || !toClean) return true;
+              if (fromClean.toLowerCase() === toClean.toLowerCase()) return true;
+              return false;
+            })()}
+            onClick={async () => {
+              if (!user?.uid) return;
+              const fromClean = normalizeTag(renameFromTag);
+              const toClean = normalizeTag(renameToTag);
+              if (!fromClean || !toClean) return;
+              if (fromClean.toLowerCase() === toClean.toLowerCase()) {
+                setRenameOpen(false);
+                return;
+              }
+
+              setRenaming(true);
+              try {
+                await renameEntryTag(user.uid, entriesTree, fromClean, toClean);
+
+                // Keep local UI state in sync.
+                setActiveTags((prev) => {
+                  const next = new Set();
+                  const fromLower = fromClean.toLowerCase();
+                  for (const t0 of Array.from(prev || [])) {
+                    const cleaned = normalizeTag(t0);
+                    if (!cleaned) continue;
+                    if (cleaned.toLowerCase() === fromLower) next.add(toClean);
+                    else next.add(cleaned);
+                  }
+                  return next;
+                });
+
+                setDraftTags((prev) => renameTagInList(prev, fromClean.toLowerCase(), toClean));
+
+                setRenameOpen(false);
+              } finally {
+                setRenaming(false);
+              }
+            }}
+          >
+            {t('journal.renameTagAction')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

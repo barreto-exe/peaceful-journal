@@ -8,6 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -72,6 +73,7 @@ function EntryDotDay(props) {
  *  availableTags?: string[],
  *  activeTags?: Set<string>,
  *  onToggleTag?: (tag: string) => void,
+ *  onRenameTag?: (tag: string) => void,
  * }} props
  */
 export default function JournalDrawer({
@@ -85,6 +87,7 @@ export default function JournalDrawer({
   availableTags,
   activeTags,
   onToggleTag,
+  onRenameTag,
 }) {
   const [tagQuery, setTagQuery] = useState('');
 
@@ -164,6 +167,8 @@ export default function JournalDrawer({
                   onClick={() => onToggleTag?.(tag)}
                   color={isActive ? 'secondary' : 'default'}
                   variant={isActive ? 'filled' : 'outlined'}
+                  onDelete={onRenameTag ? () => onRenameTag(tag) : undefined}
+                  deleteIcon={onRenameTag ? <EditIcon fontSize="small" /> : undefined}
                 />
               );
             })

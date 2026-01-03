@@ -328,3 +328,122 @@ export async function importEntries(uid, entries) {
   await update(rootRef, updates);
   return { imported: Object.keys(updates).length };
 }
+
+function normalizeTagValue(tag) {
+  const v = String(tag || '').trim();
+  if (!v) return '';
+  return v.startsWith('#') ? v.slice(1).trim() : v;
+}
+
+function renameTagInList(tags, fromLower, toTag) {
+  if (!Array.isArray(tags) || tags.length === 0) return { next: Array.isArray(tags) ? tags : [], changed: false };
+
+  /** @type {string[]} */
+  const replaced = [];
+  let hadMatch = false;
+
+  for (const raw of tags) {
+    const cleaned = normalizeTagValue(raw);
+    if (!cleaned) continue;
+    if (cleaned.toLowerCase() === fromLower) {
+      replaced.push(toTag);
+      hadMatch = true;
+    } else {
+      replaced.push(cleaned);
+    }
+  }
+
+  if (!hadMatch) return { next: replaced, changed: false };
+
+  // Deduplicate case-insensitively while preserving first casing.
+  const seen = new Set();
+  /** @type {string[]} */
+  const deduped = [];
+  for (const t of replaced) {
+    const k = String(t).toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(t);
+  }
+
+  return { next: deduped, changed: true };
+}
+
+/**
+ * Renames a tag across all entries for a user.
+ *
+ * Updates:
+ * - entries/{uid}/{dateKey}/{entryId}/tags
+ * - entries/{uid}/{dateKey}/{entryId}/draft/tags
+ * - entries/{uid}/{dateKey}/{entryId}/autosaves/{sessionId}/tags
+ *
+ * @param {string} uid
+ * @param {any | null} entriesTree
+ * @param {string} fromTag
+ * @param {string} toTag
+ * @returns {Promise<{updated: number}>}
+ */
+export async function renameEntryTag(uid, entriesTree, fromTag, toTag) {
+  if (!uid) throw new Error('Missing uid.');
+  if (!entriesTree || typeof entriesTree !== 'object') return { updated: 0 };
+
+  const fromClean = normalizeTagValue(fromTag);
+  const toClean = normalizeTagValue(toTag);
+
+  if (!fromClean || !toClean) throw new Error('Missing tag value.');
+  if (fromClean.toLowerCase() === toClean.toLowerCase()) return { updated: 0 };
+
+  const fromLower = fromClean.toLowerCase();
+
+  /** @type {Record<string, any>} */
+  const updates = {};
+  let touched = 0;
+
+  for (const dateKey of Object.keys(entriesTree)) {
+    const dayBucket = entriesTree[dateKey];
+    if (!dayBucket || typeof dayBucket !== 'object') continue;
+
+    for (const entryId of Object.keys(dayBucket)) {
+      const entry = dayBucket[entryId];
+      if (!entry || typeof entry !== 'object') continue;
+
+      // Main tags
+      if (Array.isArray(entry.tags)) {
+        const { next, changed } = renameTagInList(entry.tags, fromLower, toClean);
+        if (changed) {
+          updates[`entries/${uid}/${dateKey}/${entryId}/tags`] = next;
+          touched += 1;
+        }
+      }
+
+      // Draft tags
+      if (entry.draft && typeof entry.draft === 'object' && Array.isArray(entry.draft.tags)) {
+        const { next, changed } = renameTagInList(entry.draft.tags, fromLower, toClean);
+        if (changed) {
+          updates[`entries/${uid}/${dateKey}/${entryId}/draft/tags`] = next;
+          touched += 1;
+        }
+      }
+
+      // Autosave tags
+      if (entry.autosaves && typeof entry.autosaves === 'object') {
+        for (const sessionId of Object.keys(entry.autosaves)) {
+          const autosave = entry.autosaves[sessionId];
+          if (!autosave || typeof autosave !== 'object') continue;
+          if (!Array.isArray(autosave.tags)) continue;
+
+          const { next, changed } = renameTagInList(autosave.tags, fromLower, toClean);
+          if (changed) {
+            updates[`entries/${uid}/${dateKey}/${entryId}/autosaves/${sessionId}/tags`] = next;
+            touched += 1;
+          }
+        }
+      }
+    }
+  }
+
+  if (touched === 0) return { updated: 0 };
+  const rootRef = ref(db);
+  await update(rootRef, updates);
+  return { updated: touched };
+}

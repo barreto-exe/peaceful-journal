@@ -60,6 +60,10 @@ const resources = {
         moodGood: 'Bien',
         moodGreat: 'Genial',
         draft: 'Borrador',
+        renameTagTitle: 'Renombrar etiqueta',
+        renameTagBody: 'Cambiar "{{tag}}" por:',
+        renameTagNewLabel: 'Nuevo nombre',
+        renameTagAction: 'Renombrar',
       },
       profile: {
         title: 'Perfil',
@@ -169,6 +173,10 @@ const resources = {
         moodGood: 'Pretty good',
         moodGreat: 'Top of the world',
         draft: 'Draft',
+        renameTagTitle: 'Rename tag',
+        renameTagBody: 'Change "{{tag}}" to:',
+        renameTagNewLabel: 'New name',
+        renameTagAction: 'Rename',
       },
       profile: {
         title: 'Profile',
