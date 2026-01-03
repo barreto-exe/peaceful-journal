@@ -461,6 +461,22 @@ export default function JournalPage({
       return;
     }
 
+    // If user leaves while editing an empty entry, delete it automatically.
+    // Condition requested: no title AND no body.
+    if (isEditing) {
+      const titleEmpty = !String(draftTitle || '').trim();
+      const bodyEmpty = !stripHtmlToText(String(draftBody || '')).trim();
+      if (titleEmpty && bodyEmpty) {
+        if (user?.uid) {
+          await deleteEntry(user.uid, editingDateKey || dateKey, selectedEntryId);
+        }
+        setSelectedEntryId(null);
+        setEditingDateKey('');
+        setIsEditing(false);
+        return;
+      }
+    }
+
     // Only "Volver" can prompt discard.
     if (isEditing && (isDirty || Boolean(sessionAutosave))) {
       handleOpenDiscard();
@@ -470,7 +486,7 @@ export default function JournalPage({
     setSelectedEntryId(null);
     setEditingDateKey('');
     setIsEditing(false);
-  }, [selectedEntryId, isEditing, isDirty, sessionAutosave, handleOpenDiscard]);
+  }, [selectedEntryId, isEditing, draftTitle, draftBody, user?.uid, editingDateKey, dateKey, isDirty, sessionAutosave, handleOpenDiscard]);
 
   const handleConfirmDiscard = useCallback(async () => {
     if (!user?.uid || !selectedEntryId) return;
